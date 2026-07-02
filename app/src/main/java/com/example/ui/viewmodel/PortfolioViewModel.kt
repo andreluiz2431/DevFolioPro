@@ -438,6 +438,28 @@ class PortfolioViewModel(
     }
 
     fun signOut() {
+        viewModelScope.launch {
+            try {
+                repository.clearAllSkills()
+                repository.clearAllExperiences()
+                repository.saveProfile(
+                    ProfileEntity(
+                        id = 1,
+                        name = "",
+                        role = "",
+                        bio = "",
+                        githubUsername = "",
+                        linkedinUrl = "",
+                        email = "",
+                        phone = "",
+                        location = "",
+                        photoUrl = null
+                    )
+                )
+            } catch (e: Exception) {
+                // Ignore exceptions during DB clearing
+            }
+        }
         firebaseSyncManager.clearSession()
         _savedResumes.value = listOf("Principal")
         _selectedResumeName.value = "Principal"
