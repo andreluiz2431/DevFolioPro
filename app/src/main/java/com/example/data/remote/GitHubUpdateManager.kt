@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -154,6 +155,7 @@ class GitHubUpdateManager(private val context: Context) {
             _updateState.value = UpdateUiState.Downloading(0)
             val url = URL(downloadUrl)
             val connection = url.openConnection() as HttpURLConnection
+            connection.setRequestProperty("User-Agent", "DevFolioPro-Updater-v1.0")
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
             connection.connect()
@@ -166,10 +168,15 @@ class GitHubUpdateManager(private val context: Context) {
                 val newUrl = redirectConn.getHeaderField("Location") ?: break
                 Log.d(TAG, "Redirecting ($status) to: $newUrl")
                 redirectConn = URL(newUrl).openConnection() as HttpURLConnection
+                redirectConn.setRequestProperty("User-Agent", "DevFolioPro-Updater-v1.0")
                 redirectConn.connectTimeout = 15000
                 redirectConn.readTimeout = 15000
                 status = redirectConn.responseCode
                 redirectCount++
+            }
+
+            if (status != HttpURLConnection.HTTP_OK) {
+                throw IOException("Server returned HTTP response code: $status for URL: ${redirectConn.url}")
             }
 
             val fileLength = redirectConn.contentLength
@@ -229,6 +236,19 @@ class GitHubUpdateManager(private val context: Context) {
      */
     fun installApk(file: File) {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    Log.d(TAG, "Requesting install permission from settings")
+                    val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(settingsIntent)
+                    _updateState.value = UpdateUiState.Error("Permissão necessária: Habilite a permissão de instalar aplicativos desconhecidos nas configurações e tente instalar novamente.")
+                    return
+                }
+            }
+
             val authority = "${context.packageName}.fileprovider"
             val uri: Uri = FileProvider.getUriForFile(context, authority, file)
 

@@ -30,7 +30,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug
         env:
           # Injeta chaves nulas ou mockadas na compilação se necessário
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
