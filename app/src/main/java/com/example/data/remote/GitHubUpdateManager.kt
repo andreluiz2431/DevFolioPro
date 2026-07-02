@@ -158,12 +158,13 @@ class GitHubUpdateManager(private val context: Context) {
             connection.readTimeout = 15000
             connection.connect()
 
-            // Handle redirection if necessary
+            // Handle redirection if necessary (all 3xx status codes)
             var redirectConn = connection
             var status = connection.responseCode
             var redirectCount = 0
-            while ((status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == HttpURLConnection.HTTP_SEE_OTHER) && redirectCount < 5) {
-                val newUrl = redirectConn.getHeaderField("Location")
+            while (status in 300..399 && redirectCount < 5) {
+                val newUrl = redirectConn.getHeaderField("Location") ?: break
+                Log.d(TAG, "Redirecting ($status) to: $newUrl")
                 redirectConn = URL(newUrl).openConnection() as HttpURLConnection
                 redirectConn.connectTimeout = 15000
                 redirectConn.readTimeout = 15000
@@ -174,7 +175,8 @@ class GitHubUpdateManager(private val context: Context) {
             val fileLength = redirectConn.contentLength
             val inputStream: InputStream = redirectConn.inputStream
 
-            val updateFolder = File(context.cacheDir, "app_updates")
+            // Use externalCacheDir if available, otherwise fallback to cacheDir
+            val updateFolder = context.externalCacheDir?.let { File(it, "app_updates") } ?: File(context.cacheDir, "app_updates")
             if (!updateFolder.exists()) {
                 updateFolder.mkdirs()
             }
@@ -193,6 +195,9 @@ class GitHubUpdateManager(private val context: Context) {
                 if (fileLength > 0) {
                     val progress = ((total * 100) / fileLength).toInt()
                     _updateState.value = UpdateUiState.Downloading(progress)
+                } else {
+                    // Fallback progress if file length is unknown
+                    _updateState.value = UpdateUiState.Downloading(-1)
                 }
                 outputStream.write(buffer, 0, count)
             }
@@ -201,6 +206,14 @@ class GitHubUpdateManager(private val context: Context) {
             outputStream.close()
             inputStream.close()
 
+            // Set file permissions to be readable by installer
+            try {
+                apkFile.setReadable(true, false)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set apk file readable: ${e.localizedMessage}")
+            }
+
+            Log.d(TAG, "APK successfully downloaded to ${apkFile.absolutePath}, size: $total bytes")
             _updateState.value = UpdateUiState.DownloadCompleted(apkFile)
             
             // Auto install

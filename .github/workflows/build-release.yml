@@ -26,12 +26,11 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Make Gradle Wrapper Executable
-        run: chmod +x gradlew
-        continue-on-error: true # Caso o gradlew não esteja presente ou já tenha permissão
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
         env:
           # Injeta chaves nulas ou mockadas na compilação se necessário
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

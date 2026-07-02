@@ -2628,22 +2628,35 @@ fun AppUpdateSettings(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "${state.progress}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryColor
+                        if (state.progress >= 0) {
+                            Text(
+                                text = "${state.progress}%",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryColor
+                            )
+                        }
+                    }
+                    if (state.progress >= 0) {
+                        LinearProgressIndicator(
+                            progress = state.progress / 100f,
+                            color = primaryColor,
+                            trackColor = primaryColor.copy(alpha = 0.1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            color = primaryColor,
+                            trackColor = primaryColor.copy(alpha = 0.1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
                         )
                     }
-                    LinearProgressIndicator(
-                        progress = state.progress / 100f,
-                        color = primaryColor,
-                        trackColor = primaryColor.copy(alpha = 0.1f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
                 }
             }
             is com.example.data.remote.UpdateUiState.DownloadCompleted -> {
