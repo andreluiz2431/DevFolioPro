@@ -47,6 +47,95 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 
+enum class SettingsCategory(
+    val title: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    PROFILE_CONTENT(
+        title = "Dados & Perfil",
+        description = "Edite suas informações, habilidades e histórico profissional.",
+        icon = Icons.Default.Badge
+    ),
+    DESIGN_THEME(
+        title = "Tema & Design",
+        description = "Personalize o motor de cores, temas e a ordem das seções.",
+        icon = Icons.Default.Palette
+    ),
+    SYNC_AI(
+        title = "Nuvem & IA",
+        description = "Sincronize com Firebase ou importe dados do LinkedIn com IA.",
+        icon = Icons.Default.SmartToy
+    ),
+    EXPORT(
+        title = "Exportação",
+        description = "Gere PDFs de alta qualidade ou baixe backups do currículo.",
+        icon = Icons.Default.Download
+    )
+}
+
+@Composable
+fun CategoryCard(
+    category: SettingsCategory,
+    primaryColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .testTag("category_card_${category.name}"),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onClick() }
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(primaryColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = category.icon,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = category.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Text(
+                    text = category.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    lineHeight = 15.sp
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsScreen(
     viewModel: PortfolioViewModel,
@@ -61,6 +150,8 @@ fun SettingsScreen(
 
     val primaryColor = themeSettings.primaryColorHex.toColor()
 
+    var currentCategory by remember { mutableStateOf<SettingsCategory?>(null) }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -68,123 +159,277 @@ fun SettingsScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // SECTION 1: Theme Customization (Motor de Temas)
-        item {
-            SettingsSectionCard(
-                title = "Motor de Temas (Customizar Cores)",
-                icon = Icons.Default.Palette,
-                primaryColor = primaryColor
-            ) {
-                ThemeEngineSettings(
-                    themeSettings = themeSettings,
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
+        if (currentCategory == null) {
+            // Dashboard Welcome Header
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                ) {
+                    Text(
+                        text = "Painel de Controle",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Gerencie as configurações visuais, os dados do currículo e sincronizações na nuvem.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
-        }
 
-        // SECTION: Export Portfolio & Resume (Exportação & Download)
-        item {
-            SettingsSectionCard(
-                title = "Exportar Portfólio & Download",
-                icon = Icons.Default.Download,
-                primaryColor = primaryColor
-            ) {
-                ExportOptionsSettings(
-                    profile = profile,
-                    skills = skills,
-                    experiences = experiences,
-                    themeSettings = themeSettings,
-                    primaryColor = primaryColor
-                )
+            // Categories Grid
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Row 1
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CategoryCard(
+                            category = SettingsCategory.PROFILE_CONTENT,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.PROFILE_CONTENT },
+                            modifier = Modifier.weight(1f)
+                        )
+                        CategoryCard(
+                            category = SettingsCategory.DESIGN_THEME,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.DESIGN_THEME },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    // Row 2
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CategoryCard(
+                            category = SettingsCategory.SYNC_AI,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.SYNC_AI },
+                            modifier = Modifier.weight(1f)
+                        )
+                        CategoryCard(
+                            category = SettingsCategory.EXPORT,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.EXPORT },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
-        }
 
-        // SECTION: Cloud Sync & Authentication (Firebase)
-        item {
-            SettingsSectionCard(
-                title = "Nuvem & Sincronização (Firebase)",
-                icon = Icons.Default.CloudSync,
-                primaryColor = primaryColor
-            ) {
-                CloudSyncSettings(
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
+            // Information Card footer
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Toque em uma das categorias do painel acima para acessar as ferramentas detalhadas de customização e conteúdo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
-        }
-
-        // SECTION: Import LinkedIn Data (Importação via IA)
-        item {
-            SettingsSectionCard(
-                title = "Importar Dados do LinkedIn (IA)",
-                icon = Icons.Default.SmartToy,
-                primaryColor = primaryColor
-            ) {
-                LinkedInImportSettings(
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
+        } else {
+            // Category Active Header
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                ) {
+                    IconButton(
+                        onClick = { currentCategory = null },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Voltar ao painel",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = currentCategory!!.icon,
+                                contentDescription = null,
+                                tint = primaryColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = currentCategory!!.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = currentCategory!!.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
             }
-        }
 
-        // SECTION 2: Layout Reordering (Gestão de Layout)
-        item {
-            SettingsSectionCard(
-                title = "Gestão de Layout (Reordenar Seções)",
-                icon = Icons.Default.Layers,
-                primaryColor = primaryColor
-            ) {
-                LayoutManagerSettings(
-                    sections = sections,
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
-            }
-        }
-
-        // SECTION 3: Profile and Links (Perfil e Redes)
-        item {
-            SettingsSectionCard(
-                title = "Perfil Profissional e Redes Sociais",
-                icon = Icons.Default.Badge,
-                primaryColor = primaryColor
-            ) {
-                ProfileSettings(
-                    profile = profile,
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
-            }
-        }
-
-        // SECTION 4: Manage Skills (Gerenciar Habilidades)
-        item {
-            SettingsSectionCard(
-                title = "Gerenciar Habilidades (Skills)",
-                icon = Icons.Default.Terminal,
-                primaryColor = primaryColor
-            ) {
-                SkillsSettings(
-                    skills = skills,
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
-            }
-        }
-
-        // SECTION 5: Experience Timeline Settings (Linha do Tempo)
-        item {
-            SettingsSectionCard(
-                title = "Gerenciar Linha do Tempo (Experiências)",
-                icon = Icons.Default.WorkHistory,
-                primaryColor = primaryColor
-            ) {
-                ExperienceSettings(
-                    experiences = experiences,
-                    viewModel = viewModel,
-                    primaryColor = primaryColor
-                )
+            // Category detail settings
+            when (currentCategory) {
+                SettingsCategory.PROFILE_CONTENT -> {
+                    // Profile Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Perfil Profissional e Redes Sociais",
+                            icon = Icons.Default.Badge,
+                            primaryColor = primaryColor
+                        ) {
+                            ProfileSettings(
+                                profile = profile,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                    // Skills Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Gerenciar Habilidades (Skills)",
+                            icon = Icons.Default.Terminal,
+                            primaryColor = primaryColor
+                        ) {
+                            SkillsSettings(
+                                skills = skills,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                    // Experience Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Gerenciar Linha do Tempo (Experiências)",
+                            icon = Icons.Default.WorkHistory,
+                            primaryColor = primaryColor
+                        ) {
+                            ExperienceSettings(
+                                experiences = experiences,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                }
+                SettingsCategory.DESIGN_THEME -> {
+                    // Theme Engine Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Motor de Temas (Customizar Cores)",
+                            icon = Icons.Default.Palette,
+                            primaryColor = primaryColor
+                        ) {
+                            ThemeEngineSettings(
+                                themeSettings = themeSettings,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                    // Layout reordering
+                    item {
+                        SettingsSectionCard(
+                            title = "Gestão de Layout (Reordenar Seções)",
+                            icon = Icons.Default.Layers,
+                            primaryColor = primaryColor
+                        ) {
+                            LayoutManagerSettings(
+                                sections = sections,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                }
+                SettingsCategory.SYNC_AI -> {
+                    // Cloud Sync Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Nuvem & Sincronização (Firebase)",
+                            icon = Icons.Default.CloudSync,
+                            primaryColor = primaryColor
+                        ) {
+                            CloudSyncSettings(
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                    // LinkedIn Import
+                    item {
+                        SettingsSectionCard(
+                            title = "Importar Dados do LinkedIn (IA)",
+                            icon = Icons.Default.SmartToy,
+                            primaryColor = primaryColor
+                        ) {
+                            LinkedInImportSettings(
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                }
+                SettingsCategory.EXPORT -> {
+                    // Export & Download
+                    item {
+                        SettingsSectionCard(
+                            title = "Exportar Portfólio & Download",
+                            icon = Icons.Default.Download,
+                            primaryColor = primaryColor
+                        ) {
+                            ExportOptionsSettings(
+                                profile = profile,
+                                skills = skills,
+                                experiences = experiences,
+                                themeSettings = themeSettings,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
+                }
+                else -> {}
             }
         }
 
