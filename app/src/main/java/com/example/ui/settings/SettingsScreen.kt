@@ -227,6 +227,21 @@ fun SettingsScreen(
                 }
             }
 
+            // App Update Section - Isolated on the main menu
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsSectionCard(
+                    title = "Atualizações do Aplicativo",
+                    icon = Icons.Default.Update,
+                    primaryColor = primaryColor
+                ) {
+                    AppUpdateSettings(
+                        viewModel = viewModel,
+                        primaryColor = primaryColor
+                    )
+                }
+            }
+
             // Information Card footer
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -405,19 +420,6 @@ fun SettingsScreen(
                             primaryColor = primaryColor
                         ) {
                             LinkedInImportSettings(
-                                viewModel = viewModel,
-                                primaryColor = primaryColor
-                            )
-                        }
-                    }
-                    // App Update Checker
-                    item {
-                        SettingsSectionCard(
-                            title = "Atualizações do Aplicativo (GitHub)",
-                            icon = Icons.Default.Update,
-                            primaryColor = primaryColor
-                        ) {
-                            AppUpdateSettings(
                                 viewModel = viewModel,
                                 primaryColor = primaryColor
                             )
