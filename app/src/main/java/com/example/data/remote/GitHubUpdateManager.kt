@@ -97,8 +97,8 @@ class GitHubUpdateManager(private val context: Context) {
                 }
 
                 if (apkUrl.isBlank()) {
-                    // Fallback to zipball/tarball if no apk asset is found
-                    apkUrl = root.optString("zipball_url", "")
+                    _updateState.value = UpdateUiState.Error("Nenhum arquivo APK (.apk) foi encontrado nesta release. Verifique se o GitHub Actions concluiu o build e anexou o arquivo à release.")
+                    return@withContext null
                 }
 
                 val release = GitHubRelease(
