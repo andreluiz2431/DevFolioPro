@@ -15,6 +15,9 @@ import com.example.data.remote.PortfolioSyncData
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+import com.example.data.remote.GitHubUpdateManager
+import com.example.data.remote.UpdateUiState
+
 sealed interface GithubReposUiState {
     object Idle : GithubReposUiState
     object Loading : GithubReposUiState
@@ -49,8 +52,35 @@ sealed interface ResumeCoachUiState {
 
 class PortfolioViewModel(
     private val repository: PortfolioRepository,
-    val firebaseSyncManager: FirebaseSyncManager
+    val firebaseSyncManager: FirebaseSyncManager,
+    val gitHubUpdateManager: GitHubUpdateManager
 ) : ViewModel() {
+
+    // App Updates UI State
+    val updateUiState: StateFlow<UpdateUiState> = gitHubUpdateManager.updateState
+
+    fun checkAppUpdates() {
+        viewModelScope.launch {
+            gitHubUpdateManager.checkForUpdates()
+        }
+    }
+
+    fun downloadAndInstallApk(url: String) {
+        viewModelScope.launch {
+            gitHubUpdateManager.downloadAndInstallApk(url)
+        }
+    }
+
+    fun saveGitHubConfig(owner: String, repo: String) {
+        gitHubUpdateManager.saveGitHubConfig(owner, repo)
+    }
+
+    fun getGitHubOwner(): String = gitHubUpdateManager.getGitHubOwner()
+    fun getGitHubRepo(): String = gitHubUpdateManager.getGitHubRepo()
+
+    fun resetUpdateState() {
+        gitHubUpdateManager.resetState()
+    }
 
     // Theme Settings
     val themeSettings: StateFlow<ThemeSettingsEntity> = repository.getThemeSettings()
@@ -665,12 +695,13 @@ class PortfolioViewModel(
 
 class PortfolioViewModelFactory(
     private val repository: PortfolioRepository,
-    private val firebaseSyncManager: FirebaseSyncManager
+    private val firebaseSyncManager: FirebaseSyncManager,
+    private val gitHubUpdateManager: GitHubUpdateManager
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PortfolioViewModel::class.java)) {
-            return PortfolioViewModel(repository, firebaseSyncManager) as T
+            return PortfolioViewModel(repository, firebaseSyncManager, gitHubUpdateManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -65,9 +65,10 @@ class MainActivity : ComponentActivity() {
         val apiService = GithubApiService.create()
         val repository = PortfolioRepository(database.portfolioDao(), apiService)
         val firebaseSyncManager = com.example.data.remote.FirebaseSyncManager(applicationContext)
+        val gitHubUpdateManager = com.example.data.remote.GitHubUpdateManager(applicationContext)
         
         val viewModel: PortfolioViewModel by viewModels {
-            PortfolioViewModelFactory(repository, firebaseSyncManager)
+            PortfolioViewModelFactory(repository, firebaseSyncManager, gitHubUpdateManager)
         }
 
         setContent {
