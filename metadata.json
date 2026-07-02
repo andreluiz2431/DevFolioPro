@@ -1,0 +1,6 @@
+{
+  "name": "DevFolio Pro",
+  "description": "Portfólio profissional dinâmico para desenvolvedores e profissionais de infraestrutura de TI, com tema customizável e seções reordenáveis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
