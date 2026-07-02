@@ -30,6 +30,8 @@ import com.example.ui.theme.DynamicPortfolioTheme
 import com.example.ui.theme.toColor
 import com.example.ui.viewmodel.PortfolioViewModel
 import com.example.ui.viewmodel.PortfolioViewModelFactory
+import com.example.ui.onboarding.OnboardingDialog
+import android.content.Context
 
 // Additional profile/authentication imports
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,6 +78,14 @@ class MainActivity : ComponentActivity() {
 
             var showProfileDialog by remember { mutableStateOf(false) }
             var showSimulatedLogin by remember { mutableStateOf(false) }
+
+            val sharedPrefs = remember { context.getSharedPreferences("portfolio_sync_prefs", Context.MODE_PRIVATE) }
+            var hasShownOnboarding by remember {
+                mutableStateOf(sharedPrefs.getBoolean("onboarding_shown", false))
+            }
+            var showOnboardingDialog by remember {
+                mutableStateOf(currentUser == null && !hasShownOnboarding)
+            }
 
             val googleSignInLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult()
@@ -230,40 +240,51 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val triggerGoogleSignIn = {
+                val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+                val rIdStr = if (resId != 0) context.getString(resId) else ""
+                val webClientId = if (!rIdStr.isNullOrBlank() && rIdStr != "YOUR_GOOGLE_WEB_CLIENT_ID") {
+                    rIdStr
+                } else {
+                    BuildConfig.GOOGLE_WEB_CLIENT_ID
+                }
+
+                if (webClientId.isBlank() || webClientId == "YOUR_GOOGLE_WEB_CLIENT_ID") {
+                    Toast.makeText(
+                        context,
+                        "Web Client ID do Google não configurado no .env ou no google-services.json! Use a Conta de Teste (Simulada) para testar.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    try {
+                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                            .requestIdToken(webClientId)
+                            .requestEmail()
+                            .build()
+                        val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                        googleSignInClient.signOut()
+                        googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Erro ao iniciar Google Sign-In: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
             // Dialogs
+            if (showOnboardingDialog) {
+                OnboardingDialog(
+                    onDismiss = { showOnboardingDialog = false },
+                    viewModel = viewModel,
+                    onGoogleSignInClick = triggerGoogleSignIn,
+                    onSimulatedSignInClick = { showSimulatedLogin = true }
+                )
+            }
+
             if (showProfileDialog) {
                 ProfileDialog(
                     onDismiss = { showProfileDialog = false },
                     viewModel = viewModel,
-                    onGoogleSignInClick = {
-                        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-                        val rIdStr = if (resId != 0) context.getString(resId) else ""
-                        val webClientId = if (!rIdStr.isNullOrBlank() && rIdStr != "YOUR_GOOGLE_WEB_CLIENT_ID") {
-                            rIdStr
-                        } else {
-                            BuildConfig.GOOGLE_WEB_CLIENT_ID
-                        }
-
-                        if (webClientId.isBlank() || webClientId == "YOUR_GOOGLE_WEB_CLIENT_ID") {
-                            Toast.makeText(
-                                context,
-                                "Web Client ID do Google não configurado no .env ou no google-services.json! Use a Conta de Teste (Simulada) para testar.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            try {
-                                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                    .requestIdToken(webClientId)
-                                    .requestEmail()
-                                    .build()
-                                val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                                googleSignInClient.signOut()
-                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Erro ao iniciar Google Sign-In: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
+                    onGoogleSignInClick = triggerGoogleSignIn,
                     onSimulatedSignInClick = {
                         showSimulatedLogin = true
                     }
