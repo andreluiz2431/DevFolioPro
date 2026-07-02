@@ -5,7 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.entities.*
 import com.example.data.remote.models.GithubRepo
+import com.example.data.remote.models.ResumeImprovements
+import com.example.data.remote.models.RecommendedSkillSuggestion
+import com.example.data.remote.models.ImprovedExperienceSuggestion
 import com.example.data.repository.PortfolioRepository
+import com.example.data.remote.FirebaseSyncManager
+import com.example.data.remote.UserSession
+import com.example.data.remote.PortfolioSyncData
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -23,8 +29,27 @@ sealed interface LinkedInImportUiState {
     data class Error(val error: String) : LinkedInImportUiState
 }
 
+sealed interface FirebaseSyncUiState {
+    object Idle : FirebaseSyncUiState
+    object Loading : FirebaseSyncUiState
+    data class Success(val message: String) : FirebaseSyncUiState
+    data class Error(val error: String) : FirebaseSyncUiState
+}
+
+enum class ConflictResolution {
+    PULL_OVERWRITE, PUSH_OVERWRITE, MERGE
+}
+
+sealed interface ResumeCoachUiState {
+    object Idle : ResumeCoachUiState
+    object Loading : ResumeCoachUiState
+    data class Success(val improvements: ResumeImprovements) : ResumeCoachUiState
+    data class Error(val error: String) : ResumeCoachUiState
+}
+
 class PortfolioViewModel(
-    private val repository: PortfolioRepository
+    private val repository: PortfolioRepository,
+    val firebaseSyncManager: FirebaseSyncManager
 ) : ViewModel() {
 
     // Theme Settings
@@ -73,6 +98,16 @@ class PortfolioViewModel(
     private val _githubReposState = MutableStateFlow<GithubReposUiState>(GithubReposUiState.Idle)
     val githubReposState: StateFlow<GithubReposUiState> = _githubReposState.asStateFlow()
 
+    // Firebase Sync States & Flows (Declared before init to prevent initialization order bugs)
+    private val _syncState = MutableStateFlow<FirebaseSyncUiState>(FirebaseSyncUiState.Idle)
+    val syncState: StateFlow<FirebaseSyncUiState> = _syncState.asStateFlow()
+
+    private val _savedResumes = MutableStateFlow<List<String>>(listOf("Principal"))
+    val savedResumes: StateFlow<List<String>> = _savedResumes.asStateFlow()
+
+    private val _selectedResumeName = MutableStateFlow("Principal")
+    val selectedResumeName: StateFlow<String> = _selectedResumeName.asStateFlow()
+
     init {
         // Automatically fetch GitHub repos when the username changes and is not empty
         viewModelScope.launch {
@@ -81,6 +116,17 @@ class PortfolioViewModel(
                     fetchGithubRepos(prof.githubUsername)
                 } else {
                     _githubReposState.value = GithubReposUiState.Idle
+                }
+            }
+        }
+        // Listen to currentUser to load saved resumes list automatically
+        viewModelScope.launch {
+            firebaseSyncManager.currentUser.collect { user ->
+                if (user != null) {
+                    loadSavedResumes()
+                } else {
+                    _savedResumes.value = listOf("Principal")
+                    _selectedResumeName.value = "Principal"
                 }
             }
         }
@@ -172,6 +218,13 @@ class PortfolioViewModel(
                     location = location
                 )
             )
+        }
+    }
+
+    fun updateProfilePhoto(photoUrl: String?) {
+        viewModelScope.launch {
+            val current = profile.value
+            repository.saveProfile(current.copy(photoUrl = photoUrl))
         }
     }
 
@@ -315,15 +368,287 @@ class PortfolioViewModel(
             }
         }
     }
+
+    // Firebase Sync Functions
+    fun resetSyncState() {
+        _syncState.value = FirebaseSyncUiState.Idle
+    }
+
+    fun loadSavedResumes() {
+        val user = firebaseSyncManager.currentUser.value
+        if (user == null) {
+            _savedResumes.value = listOf("Principal")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val list = firebaseSyncManager.listSavedResumes(user.uid, user.isSimulated)
+                _savedResumes.value = list
+            } catch (e: Exception) {
+                // Keep default list
+            }
+        }
+    }
+
+    fun setSelectedResumeName(name: String) {
+        _selectedResumeName.value = name
+    }
+
+    fun deleteResume(resumeId: String) {
+        val user = firebaseSyncManager.currentUser.value ?: return
+        viewModelScope.launch {
+            _syncState.value = FirebaseSyncUiState.Loading
+            try {
+                firebaseSyncManager.deletePortfolio(user.uid, user.isSimulated, resumeId)
+                loadSavedResumes()
+                if (_selectedResumeName.value == resumeId) {
+                    _selectedResumeName.value = "Principal"
+                }
+                _syncState.value = FirebaseSyncUiState.Success("Currículo '$resumeId' excluído com sucesso!")
+            } catch (e: Exception) {
+                _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro ao excluir currículo.")
+            }
+        }
+    }
+
+    fun signInSimulated(email: String, name: String) {
+        viewModelScope.launch {
+            _syncState.value = FirebaseSyncUiState.Loading
+            try {
+                val session = firebaseSyncManager.signInSimulated(email, name)
+                _syncState.value = FirebaseSyncUiState.Success("Logado no modo simulado como ${session.displayName}!")
+                loadSavedResumes()
+            } catch (e: Exception) {
+                _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro ao fazer login simulado.")
+            }
+        }
+    }
+
+    fun signInWithGoogle(idToken: String) {
+        viewModelScope.launch {
+            _syncState.value = FirebaseSyncUiState.Loading
+            try {
+                val session = firebaseSyncManager.signInWithGoogleIdToken(idToken)
+                _syncState.value = FirebaseSyncUiState.Success("Autenticado via Google como ${session.displayName}!")
+                loadSavedResumes()
+            } catch (e: Exception) {
+                _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro ao autenticar com Firebase.")
+            }
+        }
+    }
+
+    fun signOut() {
+        firebaseSyncManager.clearSession()
+        _savedResumes.value = listOf("Principal")
+        _selectedResumeName.value = "Principal"
+        _syncState.value = FirebaseSyncUiState.Idle
+    }
+
+    fun syncWithCloud(resolution: ConflictResolution, resumeId: String = _selectedResumeName.value) {
+        val user = firebaseSyncManager.currentUser.value ?: run {
+            _syncState.value = FirebaseSyncUiState.Error("Você precisa estar logado para sincronizar.")
+            return
+        }
+        viewModelScope.launch {
+            _syncState.value = FirebaseSyncUiState.Loading
+            try {
+                when (resolution) {
+                    ConflictResolution.PUSH_OVERWRITE -> {
+                        val syncData = PortfolioSyncData(
+                            profile = profile.value,
+                            skills = skills.value,
+                            experiences = experiences.value,
+                            themeSettings = themeSettings.value,
+                            sectionOrders = sectionOrders.value
+                        )
+                        firebaseSyncManager.uploadPortfolio(user.uid, user.isSimulated, syncData, resumeId)
+                        loadSavedResumes()
+                        _selectedResumeName.value = resumeId
+                        _syncState.value = FirebaseSyncUiState.Success("Dados enviados para a nuvem com sucesso no currículo '$resumeId'!")
+                    }
+                    ConflictResolution.PULL_OVERWRITE -> {
+                        val cloudData = firebaseSyncManager.downloadPortfolio(user.uid, user.isSimulated, resumeId)
+                        if (cloudData != null) {
+                            applySyncData(cloudData)
+                            _selectedResumeName.value = resumeId
+                            _syncState.value = FirebaseSyncUiState.Success("Dados baixados do currículo '$resumeId' e aplicados localmente!")
+                        } else {
+                            _syncState.value = FirebaseSyncUiState.Error("Nenhum dado encontrado na nuvem para o currículo '$resumeId'.")
+                        }
+                    }
+                    ConflictResolution.MERGE -> {
+                        val cloudData = firebaseSyncManager.downloadPortfolio(user.uid, user.isSimulated, resumeId)
+                        if (cloudData != null) {
+                            val localData = PortfolioSyncData(
+                                profile = profile.value,
+                                skills = skills.value,
+                                experiences = experiences.value,
+                                themeSettings = themeSettings.value,
+                                sectionOrders = sectionOrders.value
+                            )
+                            val mergedData = mergeSyncData(local = localData, cloud = cloudData)
+                            applySyncData(mergedData)
+                            firebaseSyncManager.uploadPortfolio(user.uid, user.isSimulated, mergedData, resumeId)
+                            loadSavedResumes()
+                            _selectedResumeName.value = resumeId
+                            _syncState.value = FirebaseSyncUiState.Success("Dados locais e do currículo '$resumeId' mesclados com sucesso!")
+                        } else {
+                            // Equivalent to push if cloud has nothing
+                            val syncData = PortfolioSyncData(
+                                profile = profile.value,
+                                skills = skills.value,
+                                experiences = experiences.value,
+                                themeSettings = themeSettings.value,
+                                sectionOrders = sectionOrders.value
+                            )
+                            firebaseSyncManager.uploadPortfolio(user.uid, user.isSimulated, syncData, resumeId)
+                            loadSavedResumes()
+                            _selectedResumeName.value = resumeId
+                            _syncState.value = FirebaseSyncUiState.Success("Nenhum dado encontrado na nuvem. Currículo '$resumeId' criado com sucesso!")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro na sincronização.")
+            }
+        }
+    }
+
+    private suspend fun applySyncData(data: PortfolioSyncData) {
+        data.profile?.let { repository.saveProfile(it) }
+        
+        // Apply skills (clear first, then insert)
+        repository.clearAllSkills()
+        data.skills?.let { repository.insertSkills(it) }
+        
+        // Apply experiences (clear first, then insert)
+        repository.clearAllExperiences()
+        data.experiences?.let { repository.insertExperiences(it) }
+        
+        // Apply theme if available
+        data.themeSettings?.let { repository.saveThemeSettings(it) }
+        
+        // Apply section orders if available
+        data.sectionOrders?.let { repository.saveSectionOrders(it) }
+    }
+
+    private fun mergeSyncData(local: PortfolioSyncData, cloud: PortfolioSyncData): PortfolioSyncData {
+        val mergedProfile = ProfileEntity(
+            id = 1,
+            name = if (local.profile?.name.isNullOrBlank() || local.profile?.name == "Alexandre Lucas Moreira") cloud.profile?.name ?: local.profile?.name ?: "Alexandre Lucas Moreira" else local.profile?.name ?: "Alexandre Lucas Moreira",
+            role = if (local.profile?.role.isNullOrBlank() || local.profile?.role == "Sênior Android Dev & Especialista em Infraestrutura de TI") cloud.profile?.role ?: local.profile?.role ?: "Sênior Android Dev & Especialista em Infraestrutura de TI" else local.profile?.role ?: "Sênior Android Dev & Especialista em Infraestrutura de TI",
+            bio = if (local.profile?.bio.isNullOrBlank() || local.profile?.bio?.startsWith("Engenheiro de Software com mais de") == true) cloud.profile?.bio ?: local.profile?.bio ?: "" else local.profile?.bio ?: "",
+            githubUsername = if (local.profile?.githubUsername.isNullOrBlank() || local.profile?.githubUsername == "alm28062001") cloud.profile?.githubUsername ?: local.profile?.githubUsername ?: "alm28062001" else local.profile?.githubUsername ?: "alm28062001",
+            linkedinUrl = if (local.profile?.linkedinUrl.isNullOrBlank() || local.profile?.linkedinUrl?.contains("alexandrelucas-moreira") == true) cloud.profile?.linkedinUrl ?: local.profile?.linkedinUrl ?: "" else local.profile?.linkedinUrl ?: "",
+            email = if (local.profile?.email.isNullOrBlank() || local.profile?.email == "alm28062001@gmail.com") cloud.profile?.email ?: local.profile?.email ?: "" else local.profile?.email ?: "",
+            phone = if (local.profile?.phone.isNullOrBlank() || local.profile?.phone == "+55 (11) 99999-9999") cloud.profile?.phone ?: local.profile?.phone ?: "" else local.profile?.phone ?: "",
+            location = if (local.profile?.location.isNullOrBlank() || local.profile?.location == "São Paulo, Brasil") cloud.profile?.location ?: local.profile?.location ?: "" else local.profile?.location ?: ""
+        )
+
+        val localSkills = local.skills ?: emptyList()
+        val cloudSkills = cloud.skills ?: emptyList()
+        val mergedSkills = (localSkills + cloudSkills).distinctBy { it.name.trim().lowercase() }
+
+        val localExperiences = local.experiences ?: emptyList()
+        val cloudExperiences = cloud.experiences ?: emptyList()
+        val mergedExperiences = (localExperiences + cloudExperiences).distinctBy { "${it.company.trim().lowercase()}_${it.role.trim().lowercase()}" }
+            .mapIndexed { index, exp -> exp.copy(displayOrder = index + 1) }
+
+        return PortfolioSyncData(
+            profile = mergedProfile,
+            skills = mergedSkills,
+            experiences = mergedExperiences,
+            themeSettings = local.themeSettings ?: cloud.themeSettings,
+            sectionOrders = local.sectionOrders ?: cloud.sectionOrders
+        )
+    }
+
+    // Resume Coach / Melhorias Screen States & Operations
+    private val _resumeCoachState = MutableStateFlow<ResumeCoachUiState>(ResumeCoachUiState.Idle)
+    val resumeCoachState: StateFlow<ResumeCoachUiState> = _resumeCoachState.asStateFlow()
+
+    fun resetResumeCoachState() {
+        _resumeCoachState.value = ResumeCoachUiState.Idle
+    }
+
+    fun generateResumeImprovements(targetRole: String) {
+        val currentProfile = profile.value
+        val currentSkills = skills.value
+        val currentExperiences = experiences.value
+        val githubRepos = when (val s = githubReposState.value) {
+            is GithubReposUiState.Success -> s.repos
+            else -> emptyList()
+        }
+
+        viewModelScope.launch {
+            _resumeCoachState.value = ResumeCoachUiState.Loading
+            try {
+                val results = repository.suggestResumeImprovements(
+                    targetRole = targetRole,
+                    profile = currentProfile,
+                    skills = currentSkills,
+                    experiences = currentExperiences,
+                    repos = githubRepos
+                )
+                if (results != null) {
+                    _resumeCoachState.value = ResumeCoachUiState.Success(results)
+                } else {
+                    _resumeCoachState.value = ResumeCoachUiState.Error("Não foi possível gerar sugestões do servidor de IA.")
+                }
+            } catch (e: Exception) {
+                _resumeCoachState.value = ResumeCoachUiState.Error(e.localizedMessage ?: "Erro ao gerar melhorias de currículo.")
+            }
+        }
+    }
+
+    fun applyProfileImprovement(role: String, bio: String) {
+        viewModelScope.launch {
+            val current = profile.value
+            repository.saveProfile(current.copy(role = role, bio = bio))
+        }
+    }
+
+    fun addRecommendedSkill(name: String, category: String) {
+        viewModelScope.launch {
+            val normalizedCat = if (category.trim().equals("Infraestrutura", ignoreCase = true)) "Infraestrutura" else "Desenvolvimento"
+            // Avoid duplicates
+            val exists = skills.value.any { it.name.trim().lowercase() == name.trim().lowercase() }
+            if (!exists) {
+                repository.insertSkill(SkillEntity(name = name.trim(), category = normalizedCat))
+            }
+        }
+    }
+
+    fun applyExperienceImprovement(company: String, role: String, improvedDescription: String) {
+        viewModelScope.launch {
+            val localList = experiences.value
+            val match = localList.find {
+                it.company.trim().equals(company.trim(), ignoreCase = true) &&
+                it.role.trim().equals(role.trim(), ignoreCase = true)
+            }
+            if (match != null) {
+                repository.insertExperience(match.copy(description = improvedDescription))
+            } else {
+                // Try fallback matching by company
+                val matchCompany = localList.find {
+                    it.company.trim().equals(company.trim(), ignoreCase = true)
+                }
+                if (matchCompany != null) {
+                    repository.insertExperience(matchCompany.copy(description = improvedDescription))
+                }
+            }
+        }
+    }
 }
 
 class PortfolioViewModelFactory(
-    private val repository: PortfolioRepository
+    private val repository: PortfolioRepository,
+    private val firebaseSyncManager: FirebaseSyncManager
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PortfolioViewModel::class.java)) {
-            return PortfolioViewModel(repository) as T
+            return PortfolioViewModel(repository, firebaseSyncManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "96487395354",
+    "project_id": "devfoliopro-2b55b",
+    "storage_bucket": "devfoliopro-2b55b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96487395354:android:b08bc647e77fc54f5a41a3",
+        "android_client_info": {
+          "package_name": "com.aistudio.portfolio.nrujvw"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "96487395354-uessrcrft3h65o0isuoiife3vcqeadqs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.portfolio.nrujvw",
+            "certificate_hash": "7d4c2dd24f1a7eb4eaaf1fc8bee7b7acff4c244c"
+          }
+        },
+        {
+          "client_id": "96487395354-0ltiq4pm1kfj5903i120fcb21ebeughi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzNxaA0hr0uBgb_7sblm7yYfJCr10UH-M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "96487395354-0ltiq4pm1kfj5903i120fcb21ebeughi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

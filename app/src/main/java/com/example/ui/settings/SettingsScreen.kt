@@ -1,11 +1,15 @@
 package com.example.ui.settings
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,8 +28,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.BuildConfig
 import com.example.data.local.entities.ExperienceEntity
 import com.example.data.local.entities.ProfileEntity
 import com.example.data.local.entities.SectionOrderEntity
@@ -33,6 +40,12 @@ import com.example.data.local.entities.SkillEntity
 import com.example.ui.theme.toColor
 import com.example.ui.viewmodel.PortfolioViewModel
 import com.example.ui.viewmodel.LinkedInImportUiState
+import com.example.utils.ImageUtils
+import com.example.ui.viewmodel.FirebaseSyncUiState
+import com.example.ui.viewmodel.ConflictResolution
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
 @Composable
 fun SettingsScreen(
@@ -82,6 +95,20 @@ fun SettingsScreen(
                     skills = skills,
                     experiences = experiences,
                     themeSettings = themeSettings,
+                    primaryColor = primaryColor
+                )
+            }
+        }
+
+        // SECTION: Cloud Sync & Authentication (Firebase)
+        item {
+            SettingsSectionCard(
+                title = "Nuvem & Sincronização (Firebase)",
+                icon = Icons.Default.CloudSync,
+                primaryColor = primaryColor
+            ) {
+                CloudSyncSettings(
+                    viewModel = viewModel,
                     primaryColor = primaryColor
                 )
             }
@@ -545,6 +572,7 @@ fun ProfileSettings(
     primaryColor: Color
 ) {
     val context = LocalContext.current
+    val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
 
     var name by remember { mutableStateOf(profile.name) }
     var role by remember { mutableStateOf(profile.role) }
@@ -554,6 +582,20 @@ fun ProfileSettings(
     var email by remember { mutableStateOf(profile.email) }
     var phone by remember { mutableStateOf(profile.phone) }
     var location by remember { mutableStateOf(profile.location) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val base64Str = ImageUtils.uriToBase64(context, uri)
+            if (base64Str != null) {
+                viewModel.updateProfilePhoto(base64Str)
+                Toast.makeText(context, "Foto da galeria adicionada com sucesso!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Erro ao processar imagem.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     LaunchedEffect(profile) {
         name = profile.name
@@ -567,6 +609,133 @@ fun ProfileSettings(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Foto de Perfil Controller
+        Text(
+            text = "Foto de Perfil",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        )
+        
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+        ) {
+            // Visualização da Foto Atual
+            val initials = name.split(" ")
+                .filter { it.trim().isNotEmpty() }
+                .map { it.first().uppercase() }
+                .take(2)
+                .joinToString("")
+                .ifEmpty { "AS" }
+
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(primaryColor.copy(alpha = 0.1f))
+                    .border(1.dp, primaryColor.copy(alpha = 0.3f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!profile.photoUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = profile.photoUrl,
+                        contentDescription = "Foto Atual",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = initials,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor
+                        )
+                    )
+                }
+            }
+
+            // Opções de Edição
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilledTonalButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Galeria", fontSize = 12.sp)
+                    }
+
+                    if (!profile.photoUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.updateProfilePhoto(null)
+                                Toast.makeText(context, "Foto de perfil removida.", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Remover", fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                val googlePhotoUrl = currentUser?.photoUrl
+                if (!googlePhotoUrl.isNullOrBlank() && googlePhotoUrl != profile.photoUrl) {
+                    Button(
+                        onClick = {
+                            viewModel.updateProfilePhoto(googlePhotoUrl)
+                            Toast.makeText(context, "Foto do Google sincronizada!", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Usar Foto do Google", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
@@ -1203,5 +1372,778 @@ fun LinkedInImportSettings(
             }
         }
     }
+}
+
+@Composable
+fun CloudSyncSettings(
+    viewModel: PortfolioViewModel,
+    primaryColor: Color
+) {
+    val syncState by viewModel.syncState.collectAsState()
+    val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
+    val isFirebaseAvailable by viewModel.firebaseSyncManager.isFirebaseAvailable.collectAsState()
+    val context = LocalContext.current
+    var showSimulatedLogin by remember { mutableStateOf(false) }
+    var showDeveloperErrorDialog by remember { mutableStateOf(false) }
+    var developerErrorDetail by remember { mutableStateOf("") }
+
+    val savedResumes by viewModel.savedResumes.collectAsState()
+    val selectedResumeName by viewModel.selectedResumeName.collectAsState()
+    var dropdownExpanded by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var saveResolution by remember { mutableStateOf<ConflictResolution?>(null) }
+
+    // Google Sign-In launcher
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken != null) {
+                viewModel.signInWithGoogle(idToken)
+            } else {
+                Toast.makeText(context, "Não foi possível obter a credencial do Google.", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            if (e is ApiException && (e.statusCode == 10 || e.statusCode == 12500)) {
+                developerErrorDetail = "O erro ${e.statusCode} (DEVELOPER_ERROR) indica que as assinaturas do seu app (SHA-1/SHA-256) não estão cadastradas ou não combinam com a chave registrada no console Firebase.\n\n" +
+                    "Siga estes passos para corrigir no Firebase Console:\n" +
+                    "1. Acesse as Configurações do seu Projeto Firebase.\n" +
+                    "2. Na seção 'Seus aplicativos', selecione este app Android.\n" +
+                    "3. Clique em 'Adicionar impressão digital' e cole as chaves abaixo correspondentes ao debug.keystore deste ambiente."
+                showDeveloperErrorDialog = true
+            } else {
+                Toast.makeText(context, "Erro no Google Sign-In: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    LaunchedEffect(syncState) {
+        if (syncState is FirebaseSyncUiState.Success) {
+            Toast.makeText(context, (syncState as FirebaseSyncUiState.Success).message, Toast.LENGTH_SHORT).show()
+            viewModel.resetSyncState()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (currentUser != null) {
+            val user = currentUser!!
+            // Profile Box
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (!user.photoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = user.photoUrl,
+                            contentDescription = "Foto de perfil",
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(primaryColor.copy(alpha = 0.1f))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(primaryColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (user.displayName ?: "U").take(1).uppercase(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = user.displayName ?: "Usuário",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = user.email ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text("Conectado") },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    labelColor = Color(0xFF2E7D32)
+                                )
+                            )
+                            val badgeText = if (user.isSimulated) "Modo Simulado" else "Firebase Cloud"
+                            val badgeColor = if (user.isSimulated) Color(0xFFE65100) else Color(0xFF0D47A1)
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text(badgeText) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    labelColor = badgeColor
+                                )
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.signOut() },
+                        modifier = Modifier.testTag("cloud_signout_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Logout,
+                            contentDescription = "Sair",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            // Dropdown Selector of saved resumes
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Currículo Selecionado para Sincronização:",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryColor
+                )
+                
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { dropdownExpanded = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .testTag("select_resume_dropdown_button"),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Article,
+                                    contentDescription = null,
+                                    tint = primaryColor
+                                )
+                                Text(
+                                    text = selectedResumeName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Icon(
+                                imageVector = if (dropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                contentDescription = "Expandir"
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        savedResumes.forEach { resumeName ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = resumeName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (resumeName == selectedResumeName) FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (resumeName != "Principal") {
+                                            IconButton(
+                                                onClick = {
+                                                    viewModel.deleteResume(resumeName)
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Excluir currículo",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    viewModel.setSelectedResumeName(resumeName)
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                
+                Text(
+                    text = "Você pode alternar entre currículos salvos para diferentes propósitos de vagas.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Sync actions
+            Text(
+                text = "Escolha como sincronizar os dados locais com o currículo '$selectedResumeName':",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Button(
+                onClick = { 
+                    saveResolution = ConflictResolution.MERGE
+                    showSaveDialog = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("sync_merge_button"),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                shape = RoundedCornerShape(8.dp),
+                enabled = syncState !is FirebaseSyncUiState.Loading
+            ) {
+                Icon(Icons.Default.CloudSync, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sincronizar e Mesclar (Recomendado)", fontWeight = FontWeight.Bold)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.syncWithCloud(ConflictResolution.PULL_OVERWRITE, selectedResumeName) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("sync_pull_button"),
+                    border = BorderStroke(1.dp, primaryColor),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = syncState !is FirebaseSyncUiState.Loading
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Baixar Nuvem", fontSize = 12.sp)
+                }
+
+                OutlinedButton(
+                    onClick = { 
+                        saveResolution = ConflictResolution.PUSH_OVERWRITE
+                        showSaveDialog = true
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("sync_push_button"),
+                    border = BorderStroke(1.dp, primaryColor),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = syncState !is FirebaseSyncUiState.Loading
+                ) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Enviar p/ Nuvem", fontSize = 12.sp)
+                }
+            }
+
+            // Dialog for Saving Resume Options (Sobrescrever ou Criar Novo)
+            if (showSaveDialog && saveResolution != null) {
+                var saveAsNew by remember { mutableStateOf(false) }
+                var newNameInput by remember { mutableStateOf("") }
+
+                AlertDialog(
+                    onDismissRequest = { showSaveDialog = false },
+                    title = {
+                        Text(
+                            text = "Opções de Envio à Nuvem",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Como deseja salvar as informações do currículo atual no Firebase?",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { saveAsNew = false }
+                                ) {
+                                    RadioButton(
+                                        selected = !saveAsNew,
+                                        onClick = { saveAsNew = false }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Substituir currículo atual: '$selectedResumeName'",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { saveAsNew = true }
+                                ) {
+                                    RadioButton(
+                                        selected = saveAsNew,
+                                        onClick = { saveAsNew = true }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Criar novo currículo (separado)",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            if (saveAsNew) {
+                                OutlinedTextField(
+                                    value = newNameInput,
+                                    onValueChange = { newNameInput = it },
+                                    label = { Text("Nome/Propósito do Currículo") },
+                                    placeholder = { Text("Ex: Vaga Mobile, DevOps...") },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("new_resume_name_input"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = primaryColor,
+                                        focusedLabelColor = primaryColor
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (saveAsNew && newNameInput.isBlank()) {
+                                    Toast.makeText(context, "Por favor, digite um nome válido!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val targetId = if (saveAsNew) newNameInput.trim() else selectedResumeName
+                                    viewModel.syncWithCloud(saveResolution!!, targetId)
+                                    showSaveDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                        ) {
+                            Text("Salvar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSaveDialog = false }) {
+                            Text("Cancelar", color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                )
+            }
+        } else {
+            // Logged out
+            Text(
+                text = "Mantenha seu portfólio salvo com segurança na nuvem! Faça login para sincronizar dados em tempo real ou transferir para outros dispositivos.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(
+                    onClick = {
+                        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+                        val rIdStr = if (resId != 0) context.getString(resId) else ""
+                        val webClientId = if (!rIdStr.isNullOrBlank() && rIdStr != "YOUR_GOOGLE_WEB_CLIENT_ID") {
+                            rIdStr
+                        } else {
+                            BuildConfig.GOOGLE_WEB_CLIENT_ID
+                        }
+
+                        if (webClientId.isBlank() || webClientId == "YOUR_GOOGLE_WEB_CLIENT_ID") {
+                            Toast.makeText(
+                                context,
+                                "Web Client ID do Google não configurado no .env ou no google-services.json! Use a Conta de Teste (Simulada) abaixo para testar.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            try {
+                                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                    .requestIdToken(webClientId)
+                                    .requestEmail()
+                                    .build()
+                                val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                                // Force sign out first so the Google Account chooser is always displayed
+                                googleSignInClient.signOut()
+                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Erro ao iniciar Google Sign-In: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("google_login_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = syncState !is FirebaseSyncUiState.Loading
+                ) {
+                    Icon(imageVector = Icons.Default.Login, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Entrar com Google (Firebase)", fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = { showSimulatedLogin = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("simulated_login_button"),
+                    border = BorderStroke(1.dp, primaryColor),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = syncState !is FirebaseSyncUiState.Loading
+                ) {
+                    Icon(imageVector = Icons.Default.SmartToy, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Entrar com Conta de Teste (Simulado)", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = primaryColor
+                    )
+                    Text(
+                        text = "O modo simulado permite experimentar a experiência de nuvem salvando seus backups de forma virtual, ideal para rodar no emulador imediatamente!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Show loading and status
+        when (val state = syncState) {
+            is FirebaseSyncUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(color = primaryColor)
+                        Text(
+                            text = "Aguardando sincronização da nuvem...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = primaryColor
+                        )
+                    }
+                }
+            }
+            is FirebaseSyncUiState.Error -> {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = state.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { viewModel.resetSyncState() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Fechar", tint = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    if (showSimulatedLogin) {
+        SimulatedLoginDialog(
+            onDismiss = { showSimulatedLogin = false },
+            onConfirm = { email, name ->
+                showSimulatedLogin = false
+                viewModel.signInSimulated(email, name)
+            },
+            primaryColor = primaryColor
+        )
+    }
+
+    if (showDeveloperErrorDialog) {
+        val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+        AlertDialog(
+            onDismissRequest = { showDeveloperErrorDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Text(text = "Configurar Google Sign-In")
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = developerErrorDetail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Suas chaves de assinatura do app (SHA):",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // SHA-1 Box
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("SHA-1", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
+                            TextButton(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("7D:4C:2D:D2:4F:1A:7E:B4:EA:AF:1F:C8:BE:E7:B7:AC:FF:4C:24:4C"))
+                                    Toast.makeText(context, "SHA-1 copiado!", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text("Copiar", fontSize = 11.sp, color = primaryColor)
+                            }
+                        }
+                        Text(
+                            "7D:4C:2D:D2:4F:1A:7E:B4:EA:AF:1F:C8:BE:E7:B7:AC:FF:4C:24:4C",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+
+                    // SHA-256 Box
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("SHA-256", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
+                            TextButton(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("B2:5F:95:8E:1B:A5:26:FA:25:45:79:45:11:55:65:59:D8:ED:0C:BE:69:2A:41:2D:D2:3B:F7:CF:92:3D:07:E5"))
+                                    Toast.makeText(context, "SHA-256 copiado!", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text("Copiar", fontSize = 11.sp, color = primaryColor)
+                            }
+                        }
+                        Text(
+                            "B2:5F:95:8E:1B:A5:26:FA:25:45:79:45:11:55:65:59:D8:ED:0C:BE:69:2A:41:2D:D2:3B:F7:CF:92:3D:07:E5",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showDeveloperErrorDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                ) {
+                    Text("Entendi", color = Color.White)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SimulatedLoginDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (email: String, name: String) -> Unit,
+    primaryColor: Color
+) {
+    var email by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var emailError by remember { mutableStateOf(false) }
+    var nameError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.SmartToy, contentDescription = null, tint = primaryColor)
+                Text(text = "Entrar com Conta de Teste")
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Insira um e-mail e nome fictícios para simular uma conta autenticada na nuvem.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        nameError = false
+                    },
+                    label = { Text("Nome Completo") },
+                    placeholder = { Text("Ex: Alexandre Lucas") },
+                    isError = nameError,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = primaryColor,
+                        focusedLabelColor = primaryColor
+                    )
+                )
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        emailError = false
+                    },
+                    label = { Text("E-mail") },
+                    placeholder = { Text("Ex: dev@devfolio.pro") },
+                    isError = emailError,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = primaryColor,
+                        focusedLabelColor = primaryColor
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isBlank()) nameError = true
+                    if (email.isBlank() || !email.contains("@")) emailError = true
+                    
+                    if (!nameError && !emailError) {
+                        onConfirm(email, name)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+            ) {
+                Text("Entrar", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = primaryColor)
+            }
+        }
+    )
 }
 

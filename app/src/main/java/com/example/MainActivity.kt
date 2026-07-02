@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,6 +23,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.remote.GithubApiService
 import com.example.data.repository.PortfolioRepository
 import com.example.ui.home.HomeScreen
+import com.example.ui.coach.ResumeCoachScreen
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.theme.DynamicPortfolioTheme
 import com.example.ui.theme.toColor
@@ -37,9 +40,10 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(applicationContext, lifecycleScope)
         val apiService = GithubApiService.create()
         val repository = PortfolioRepository(database.portfolioDao(), apiService)
+        val firebaseSyncManager = com.example.data.remote.FirebaseSyncManager(applicationContext)
         
         val viewModel: PortfolioViewModel by viewModels {
-            PortfolioViewModelFactory(repository)
+            PortfolioViewModelFactory(repository, firebaseSyncManager)
         }
 
         setContent {
@@ -78,7 +82,25 @@ class MainActivity : ComponentActivity() {
                                 onClick = { selectedTab = 1 },
                                 icon = {
                                     Icon(
-                                        imageVector = if (selectedTab == 1) Icons.Default.Settings else Icons.Outlined.Settings,
+                                        imageVector = if (selectedTab == 1) Icons.Default.Star else Icons.Outlined.Star,
+                                        contentDescription = "Melhorias"
+                                    )
+                                },
+                                label = { Text("Melhorias") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = primaryColor,
+                                    selectedTextColor = primaryColor,
+                                    indicatorColor = primaryColor.copy(alpha = 0.1f)
+                                ),
+                                modifier = Modifier.testTag("tab_melhorias")
+                            )
+
+                            NavigationBarItem(
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selectedTab == 2) Icons.Default.Settings else Icons.Outlined.Settings,
                                         contentDescription = "Ajustes"
                                     )
                                 },
@@ -93,16 +115,25 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    if (selectedTab == 0) {
-                        HomeScreen(
-                            viewModel = viewModel,
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    } else {
-                        SettingsScreen(
-                            viewModel = viewModel,
-                            modifier = Modifier.padding(innerPadding)
-                        )
+                    when (selectedTab) {
+                        0 -> {
+                            HomeScreen(
+                                viewModel = viewModel,
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
+                        1 -> {
+                            ResumeCoachScreen(
+                                viewModel = viewModel,
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
+                        else -> {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
                     }
                 }
             }

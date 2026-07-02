@@ -24,7 +24,8 @@ data class ProfileEntity(
     val linkedinUrl: String = "https://www.linkedin.com/in/alexandrelucas-moreira",
     val email: String = "alm28062001@gmail.com",
     val phone: String = "+55 (11) 99999-9999",
-    val location: String = "São Paulo, Brasil"
+    val location: String = "São Paulo, Brasil",
+    val photoUrl: String? = null
 )
 
 @Entity(tableName = "skills")
