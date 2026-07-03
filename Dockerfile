@@ -1,18 +1,15 @@
 # ==========================================
 # STAGE 1: Build Kotlin Multiplatform Web App
 # ==========================================
-FROM eclipse-temurin:17-jdk-jammy AS builder
+FROM gradle:8.5-jdk17 AS builder
 WORKDIR /app
 
-# Copy the entire project
-COPY . .
-
-# Grant execute permission to gradlew
-RUN chmod +x gradlew
+# Copy the entire project with proper permissions
+COPY --chown=gradle:gradle . .
 
 # Build the JS Browser Production Distribution
 # This runs dead-code elimination (DCE), code optimization and bundling
-RUN ./gradlew :web:jsBrowserProductionDistribution --no-daemon --stacktrace
+RUN gradle :web:jsBrowserProductionDistribution --no-daemon --stacktrace
 
 # ==========================================
 # STAGE 2: Run Production Node.js Server
