@@ -121,6 +121,37 @@ GOOGLE_WEB_CLIENT_ID=seu_web_client_id_do_google
 
 ---
 
+## 🌐 Kotlin Multiplatform (KMP) & Portabilidade Web
+
+Para expandir o **DevFolio Pro** além do ambiente nativo Android, migramos o projeto para a arquitetura **Kotlin Multiplatform (KMP)** com suporte a múltiplos alvos (Android e Web) no mesmo repositório e base de código:
+
+### 📦 Estrutura Multiplataforma:
+1. **`:shared` (Módulo de Código Comum):** Contém toda a lógica de negócios, modelos de domínio reusáveis e constantes compartilhadas (como `SharedProfile` e `SharedConstants`) entre as plataformas de forma eficiente (compilado para JVM no Android e para JS na Web).
+2. **`:app` (Módulo Android):** Nosso aplicativo móvel nativo em Jetpack Compose Material 3 de alto desempenho, consumindo o módulo comum `:shared`.
+3. **`:web` (Módulo Web SPA):** Uma aplicação Web de página única (SPA) escrita em **Kotlin/JS** com **Compose Multiplatform HTML** e estilizada com **Tailwind CSS** para uma interface ultra-moderna e fluida.
+
+---
+
+## 🚂 Hospedagem Automatizada no Railway
+
+O projeto está 100% preparado e configurado para deploy contínuo (**GitOps**) no **Railway**. Ao conectar seu repositório do GitHub ao Railway, ele detectará as configurações e fará o deploy automático!
+
+### 🔧 Arquivos de Configuração Inclusos:
+* **`Dockerfile` (Multistage Build):** 
+  1. No primeiro estágio, realiza o build da aplicação KMP utilizando o JDK 17 e compila o código Kotlin/JS otimizado para produção (`./gradlew :web:jsBrowserProductionDistribution`), aplicando eliminação de código morto (DCE) e minificação.
+  2. No segundo estágio, utiliza uma imagem Node.js extremamente leve para hospedar o servidor Express de produção.
+* **`server.js`:** Um servidor web Node.js leve configurado para servir os arquivos estáticos e lidar com roteamento SPA (Single Page Application) servindo `index.html` em qualquer rota desconhecida.
+* **`package.json`:** Gerencia as dependências do servidor Node.js (como o Express).
+* **`railway.json`:** Instruções específicas para o motor do Railway para priorizar o nosso `Dockerfile` de forma automática.
+
+### 🚀 Como implantar no Railway:
+1. Crie seu repositório no **GitHub** e envie o código do projeto.
+2. Acesse o painel do [Railway.app](https://railway.app/).
+3. Clique em **"New Project"** -> **"Deploy from GitHub repo"** e selecione o seu repositório.
+4. O Railway iniciará automaticamente o processo de compilação multi-estágio pelo Dockerfile e publicará seu portfólio Web em segundos! Ele ligará automaticamente a aplicação ao endereço público gerado e na porta dinâmica (`$PORT`) fornecida pelo Railway.
+
+---
+
 ## 🧪 Práticas de Teste
 
 O projeto inclui um arcabouço robusto para testes automáticos de qualidade:
