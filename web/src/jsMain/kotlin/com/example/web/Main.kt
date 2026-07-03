@@ -759,7 +759,7 @@ fun main() {
                                                     classes("flex-1", "py-2", "rounded-lg", "text-xs", "font-bold", "bg-indigo-600/20", "hover:bg-indigo-600/40", "text-indigo-300", "border", "border-indigo-500/20", "transition-all")
                                                     onClick {
                                                         val updatedExps = experiencesState.toMutableList()
-                                                        val existingIndex = updatedExps.indexOfFirst { it.company.contains(coachSuggestedCompany, ignoreCase = true) || it.role.contains(coachSuggestedJobRole, ignoreCase = true) }
+                                                        val existingIndex = updatedExps.indexOfFirst { it.title.contains(coachSuggestedCompany, ignoreCase = true) || it.title.contains(coachSuggestedJobRole, ignoreCase = true) }
                                                         if (existingIndex >= 0) {
                                                             updatedExps[existingIndex] = Experience(coachSuggestedJobRole, updatedExps[existingIndex].period, coachSuggestedExpDesc)
                                                         } else {
@@ -839,7 +839,7 @@ fun main() {
                                                     skillsState = newSet.toList()
                                                     // Experience
                                                     val updatedExps = experiencesState.toMutableList()
-                                                    val existingIndex = updatedExps.indexOfFirst { it.company.contains(coachSuggestedCompany, ignoreCase = true) || it.role.contains(coachSuggestedJobRole, ignoreCase = true) }
+                                                    val existingIndex = updatedExps.indexOfFirst { it.title.contains(coachSuggestedCompany, ignoreCase = true) || it.title.contains(coachSuggestedJobRole, ignoreCase = true) }
                                                     if (existingIndex >= 0) {
                                                         updatedExps[existingIndex] = Experience(coachSuggestedJobRole, updatedExps[existingIndex].period, coachSuggestedExpDesc)
                                                     } else {
