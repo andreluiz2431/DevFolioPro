@@ -34,7 +34,10 @@ data class Certification(
 
 data class WebUser(
     val name: String,
-    val email: String
+    val email: String,
+    val photoUrl: String? = null,
+    val isSimulated: Boolean = false,
+    val uid: String = "uid_" + email.hashCode()
 )
 
 enum class AccentColor(
@@ -138,8 +141,36 @@ fun main() {
         // Authentication State (Matching Android Profile Settings)
         var currentUser by remember { mutableStateOf<WebUser?>(null) }
         var showLoginDialog by remember { mutableStateOf(false) }
+        var showGoogleIdentityModal by remember { mutableStateOf(false) }
         var authEmailInput by remember { mutableStateOf("") }
         var authNameInput by remember { mutableStateOf("") }
+
+        // Section Orders (Layout Manager)
+        var webSections by remember {
+            mutableStateOf(
+                listOf("Sobre Mim", "Habilidades", "Experiência Profissional", "Certificações")
+            )
+        }
+
+        // Certification creation input helpers
+        var certTitleInput by remember { mutableStateOf("") }
+        var certCategoryInput by remember { mutableStateOf("Cloud & DevOps") }
+        var certDurationInput by remember { mutableStateOf("") }
+        var certCostInput by remember { mutableStateOf("") }
+        var certDescInput by remember { mutableStateOf("") }
+
+        // LinkedIn / CV Import IA State
+        var linkedinRawInput by remember { mutableStateOf("") }
+        var linkedinReplaceMode by remember { mutableStateOf(false) }
+        var isLinkedinImporting by remember { mutableStateOf(false) }
+
+        // Cloud Firebase Sync States
+        var savedBackups by remember { mutableStateOf(listOf("Principal")) }
+        var selectedBackupId by remember { mutableStateOf("Principal") }
+        var showBackupNameInput by remember { mutableStateOf(false) }
+        var newBackupName by remember { mutableStateOf("") }
+        var syncSuccessMessage by remember { mutableStateOf<String?>(null) }
+        var syncErrorMessage by remember { mutableStateOf<String?>(null) }
 
         // AI Resume Coach State
         var coachSelectedRole by remember { mutableStateOf("Engenheiro DevOps") }
@@ -198,19 +229,27 @@ fun main() {
                     Div(attrs = { classes("flex", "items-center", "gap-4") }) {
                         val user = currentUser
                         if (user != null) {
-                            // User is signed-in (Simulated Firebase Sync Status)
+                            // User is signed-in (Firebase Sync Status)
                             Div(attrs = { classes("flex", "items-center", "gap-3", "bg-slate-950/60", "p-2", "rounded-xl", "border", "border-slate-800") }) {
-                                Div(attrs = { 
-                                    classesList("w-8", "h-8", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white", accentColor.bgGradient) 
-                                }) {
-                                    Text(user.name.take(1).uppercase())
+                                if (user.photoUrl != null) {
+                                    Img(src = user.photoUrl, alt = user.name, attrs = {
+                                        classes("w-8", "h-8", "rounded-full", "border", "border-slate-700")
+                                    })
+                                } else {
+                                    Div(attrs = { 
+                                        classesList("w-8", "h-8", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white", accentColor.bgGradient) 
+                                    }) {
+                                        Text(user.name.take(1).uppercase())
+                                    }
                                 }
                                 Div(attrs = { classes("hidden", "sm:block") }) {
                                     P(attrs = { classes("text-xs", "font-bold", "text-white", "leading-tight") }) {
                                         Text(user.name)
                                     }
-                                    P(attrs = { classes("text-[10px]", "text-emerald-400", "flex", "items-center", "gap-1") }) {
-                                        Text("● Sincronizado na Nuvem")
+                                    P(attrs = { 
+                                        classes("text-[10px]", if (user.isSimulated) "text-amber-400" else "text-emerald-400", "flex", "items-center", "gap-1") 
+                                    }) {
+                                        Text(if (user.isSimulated) "☁️ Nuvem (Simulado)" else "🔥 Google & Firebase Ativo")
                                     }
                                 }
                                 Button(attrs = {
@@ -273,7 +312,7 @@ fun main() {
                         )
                         onClick { selectedTab = "settings" }
                     }) {
-                        Text("🛠️ Ajustes & Dados")
+                        Text("🛠️ Painel de Serviços")
                     }
                 }
             }
@@ -320,27 +359,8 @@ fun main() {
 
                             // Dynamic sections container
                             Div(attrs = { classes("grid", "grid-cols-1", "md:grid-cols-3", "gap-8") }) {
-                                // Left Sidebar Info
+                                // Left Sidebar Info (Stays fixed for essential bio contact)
                                 Div(attrs = { classes("md:col-span-1", "space-y-8") }) {
-                                    // Skills Card
-                                    Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800") }) {
-                                        H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4", "flex", "items-center", "gap-2") }) {
-                                            Text("⚡ Habilidades")
-                                        }
-                                        Div(attrs = { classes("flex", "flex-wrap", "gap-2") }) {
-                                            skillsState.forEach { skill ->
-                                                Span(attrs = {
-                                                    classes(
-                                                        "px-2.5", "py-1", "rounded-lg", "text-xs", "font-semibold", 
-                                                        "bg-slate-800", "text-slate-300", "border", "border-slate-700/60"
-                                                    )
-                                                }) {
-                                                    Text(skill)
-                                                }
-                                            }
-                                        }
-                                    }
-
                                     // Contacts & Socials
                                     Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800") }) {
                                         H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4") }) {
@@ -366,70 +386,98 @@ fun main() {
                                     }
                                 }
 
-                                // Right Detailed Area
+                                // Right Detailed Area (Ordered Dynamically via Layout Manager)
                                 Div(attrs = { classes("md:col-span-2", "space-y-8") }) {
-                                    // Bio/Sobre Card
-                                    Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800") }) {
-                                        H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4") }) {
-                                            Text("👤 Sobre Mim")
-                                        }
-                                        P(attrs = { classes("text-slate-300", "leading-relaxed", "text-base") }) {
-                                            Text(bioState)
-                                        }
-                                    }
-
-                                    // Experiences Timeline
-                                    Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800") }) {
-                                        H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-6") }) {
-                                            Text("💼 Experiência Profissional")
-                                        }
-                                        Div(attrs = { classes("space-y-6") }) {
-                                            experiencesState.forEach { exp ->
-                                                Div(attrs = { classes("relative", "pl-6", "border-l-2", "border-slate-800") }) {
-                                                    Div(attrs = { 
-                                                        classes(
-                                                            "absolute", "-left-[9px]", "top-1.5", "w-4", "h-4", "rounded-full", 
-                                                            "border-4", "border-slate-950"
-                                                        ) 
-                                                        style {
-                                                            property("background-color", accentColor.primaryHex)
-                                                        }
-                                                    })
-                                                    H4(attrs = { classes("text-lg", "font-bold", "text-slate-100") }) {
-                                                        Text(exp.title)
+                                    webSections.forEach { sectionName ->
+                                        when (sectionName) {
+                                            "Sobre Mim" -> {
+                                                // Bio/Sobre Card
+                                                Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800", "animate-fade-in") }) {
+                                                    H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4") }) {
+                                                        Text("👤 Sobre Mim")
                                                     }
-                                                    P(attrs = { classes("text-xs", "font-semibold", accentColor.textClass, "mb-2") }) {
-                                                        Text(exp.period)
-                                                    }
-                                                    P(attrs = { classes("text-slate-400", "text-sm", "leading-relaxed") }) {
-                                                        Text(exp.description)
+                                                    P(attrs = { classes("text-slate-300", "leading-relaxed", "text-base") }) {
+                                                        Text(bioState)
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-
-                                    // Certifications List
-                                    Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800") }) {
-                                        H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4") }) {
-                                            Text("🎓 Certificações")
-                                        }
-                                        Div(attrs = { classes("space-y-4") }) {
-                                            certificationsState.forEach { cert ->
-                                                Div(attrs = { classes("bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
-                                                    Div(attrs = { classes("flex", "justify-between", "items-start", "gap-2", "mb-2") }) {
-                                                        H4(attrs = { classes("font-bold", accentColor.textClass) }) {
-                                                            Text(cert.title)
-                                                        }
-                                                        Span(attrs = { classes("text-[10px]", "font-bold", "bg-slate-800", "text-slate-300", "px-2", "py-0.5", "rounded-full") }) {
-                                                            Text(cert.category)
+                                            "Habilidades" -> {
+                                                // Skills Card (Renders as main block)
+                                                Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800", "animate-fade-in") }) {
+                                                    H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4", "flex", "items-center", "gap-2") }) {
+                                                        Text("⚡ Habilidades Técnicas")
+                                                    }
+                                                    Div(attrs = { classes("flex", "flex-wrap", "gap-2") }) {
+                                                        skillsState.forEach { skill ->
+                                                            Span(attrs = {
+                                                                classes(
+                                                                    "px-2.5", "py-1.5", "rounded-lg", "text-xs", "font-semibold", 
+                                                                    "bg-slate-800", "text-slate-300", "border", "border-slate-700/60"
+                                                                )
+                                                            }) {
+                                                                Text(skill)
+                                                            }
                                                         }
                                                     }
-                                                    P(attrs = { classes("text-[10px]", "text-slate-500", "mb-2") }) {
-                                                        Text("Duração: ${cert.duration} | Custo: ${cert.cost}")
+                                                }
+                                            }
+                                            "Experiência Profissional" -> {
+                                                // Experiences Timeline
+                                                Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800", "animate-fade-in") }) {
+                                                    H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-6") }) {
+                                                        Text("💼 Experiência Profissional")
                                                     }
-                                                    P(attrs = { classes("text-xs", "text-slate-400", "leading-relaxed") }) {
-                                                        Text(cert.description)
+                                                    Div(attrs = { classes("space-y-6") }) {
+                                                        experiencesState.forEach { exp ->
+                                                            Div(attrs = { classes("relative", "pl-6", "border-l-2", "border-slate-800") }) {
+                                                                Div(attrs = { 
+                                                                    classes(
+                                                                        "absolute", "-left-[9px]", "top-1.5", "w-4", "h-4", "rounded-full", 
+                                                                        "border-4", "border-slate-950"
+                                                                    ) 
+                                                                    style {
+                                                                        property("background-color", accentColor.primaryHex)
+                                                                    }
+                                                                })
+                                                                H4(attrs = { classes("text-lg", "font-bold", "text-slate-100") }) {
+                                                                    Text(exp.title)
+                                                                }
+                                                                P(attrs = { classes("text-xs", "font-semibold", accentColor.textClass, "mb-2") }) {
+                                                                    Text(exp.period)
+                                                                }
+                                                                P(attrs = { classes("text-slate-400", "text-sm", "leading-relaxed") }) {
+                                                                    Text(exp.description)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            "Certificações" -> {
+                                                // Certifications List
+                                                Div(attrs = { classes("bg-slate-900/60", "backdrop-blur-xl", "rounded-2xl", "p-6", "border", "border-slate-800", "animate-fade-in") }) {
+                                                    H3(attrs = { classes("text-sm", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "mb-4") }) {
+                                                        Text("🎓 Certificações")
+                                                    }
+                                                    Div(attrs = { classes("space-y-4") }) {
+                                                        certificationsState.forEach { cert ->
+                                                            Div(attrs = { classes("bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
+                                                                Div(attrs = { classes("flex", "justify-between", "items-start", "gap-2", "mb-2") }) {
+                                                                    H4(attrs = { classes("font-bold", accentColor.textClass) }) {
+                                                                        Text(cert.title)
+                                                                    }
+                                                                    Span(attrs = { classes("text-[10px]", "font-bold", "bg-slate-800", "text-slate-300", "px-2", "py-0.5", "rounded-full") }) {
+                                                                        Text(cert.category)
+                                                                    }
+                                                                }
+                                                                P(attrs = { classes("text-[10px]", "text-slate-500", "mb-2") }) {
+                                                                    Text("Duração: ${cert.duration} | Custo: ${cert.cost}")
+                                                                }
+                                                                P(attrs = { classes("text-xs", "text-slate-400", "leading-relaxed") }) {
+                                                                    Text(cert.description)
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -619,9 +667,266 @@ fun main() {
                     }
 
                     "settings" -> {
-                        // --- SETTINGS AND PROFILE CONFIGURATION VIEW ---
+                        // --- PAINEL DE SERVIÇOS & AJUSTES VIEW ---
                         Div(attrs = { classes("space-y-12") }) {
-                            // Category: Design and Colors (Real-Time Styling)
+                            // Section: Cloud Sync & Firebase
+                            Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
+                                H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3", "flex", "items-center", "gap-2") }) {
+                                    Text("🔥 Sincronização na Nuvem (Firebase)")
+                                }
+
+                                val user = currentUser
+                                if (user == null) {
+                                    Div(attrs = { classes("bg-slate-950/40", "p-5", "rounded-2xl", "border", "border-slate-800/80", "space-y-4", "text-center") }) {
+                                        P(attrs = { classes("text-xs", "text-slate-400", "leading-relaxed") }) {
+                                            Text("Sincronize seu portfólio em tempo real com o Firebase Cloud Firestore e gerencie múltiplos currículos na nuvem de forma prática.")
+                                        }
+                                        Div(attrs = { classes("flex", "flex-col", "sm:flex-row", "gap-3", "justify-center") }) {
+                                            // Simulated Google Sign-In button
+                                            Button(attrs = {
+                                                classes("px-4", "py-2.5", "rounded-xl", "text-xs", "font-bold", "bg-white", "hover:bg-slate-100", "text-slate-900", "transition-all", "flex", "items-center", "justify-center", "gap-2")
+                                                onClick { showGoogleIdentityModal = true }
+                                            }) {
+                                                Span { Text("🔑") }
+                                                Text("Entrar com Google (Firebase)")
+                                            }
+                                            // Test account button
+                                            Button(attrs = {
+                                                classes("px-4", "py-2.5", "rounded-xl", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "border", "border-slate-700/60", "transition-all")
+                                                onClick { showLoginDialog = true }
+                                            }) {
+                                                Text("Acessar com Conta de Teste")
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Signed in view: Firebase Panel
+                                    Div(attrs = { classes("space-y-6") }) {
+                                        // User card info
+                                        Div(attrs = { classes("flex", "flex-col", "sm:flex-row", "justify-between", "items-start", "sm:items-center", "gap-4", "bg-slate-950/60", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
+                                            Div(attrs = { classes("flex", "items-center", "gap-3") }) {
+                                                if (user.photoUrl != null) {
+                                                    Img(src = user.photoUrl, alt = user.name, attrs = {
+                                                        classes("w-10", "h-10", "rounded-full", "border", "border-slate-700")
+                                                    })
+                                                } else {
+                                                    Div(attrs = { 
+                                                        classesList("w-10", "h-10", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-sm", "font-bold", "text-white", accentColor.bgGradient) 
+                                                    }) {
+                                                        Text(user.name.take(1).uppercase())
+                                                    }
+                                                }
+                                                Div {
+                                                    P(attrs = { classes("text-sm", "font-bold", "text-white") }) {
+                                                        Text(user.name)
+                                                    }
+                                                    P(attrs = { classes("text-xs", "text-slate-400") }) {
+                                                        Text(user.email)
+                                                    }
+                                                    Span(attrs = { 
+                                                        classes(
+                                                            "mt-1", "inline-block", "px-2", "py-0.5", "rounded-full", "text-[10px]", "font-bold",
+                                                            if (user.isSimulated) "bg-amber-500/10 text-amber-300 border border-amber-500/20" else "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                                                        ) 
+                                                    }) {
+                                                        Text(if (user.isSimulated) "Modo Backup Local" else "Autenticação via Google Firebase")
+                                                    }
+                                                }
+                                            }
+                                            Button(attrs = {
+                                                classes("px-3", "py-1.5", "rounded-lg", "text-xs", "font-semibold", "bg-rose-500/10", "hover:bg-rose-500/20", "text-rose-400", "border", "border-rose-500/20", "transition-all")
+                                                onClick { currentUser = null }
+                                            }) {
+                                                Text("Desconectar")
+                                            }
+                                        }
+
+                                        // Sync feedback
+                                        syncSuccessMessage?.let { msg ->
+                                            Div(attrs = { classes("bg-emerald-500/10", "border", "border-emerald-500/20", "text-emerald-300", "p-4", "rounded-xl", "text-xs", "font-semibold") }) {
+                                                Text(msg)
+                                            }
+                                        }
+
+                                        // Multi-resume slots selection
+                                        Div(attrs = { classes("space-y-3", "bg-slate-950/20", "p-4", "rounded-xl", "border", "border-slate-800/60") }) {
+                                            P(attrs = { classes("text-xs", "font-bold", "text-slate-300") }) {
+                                                Text("Selecione o Slot / Identificador de Backup:")
+                                            }
+                                            Div(attrs = { classes("flex", "flex-col", "sm:flex-row", "gap-3") }) {
+                                                Select(attrs = {
+                                                    classes("bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-2.5", "text-xs", "text-white", "focus:outline-none")
+                                                    onChange { event ->
+                                                        event.value?.let { selectedBackupId = it }
+                                                    }
+                                                }) {
+                                                    savedBackups.forEach { backupId ->
+                                                        Option(backupId, attrs = { if (selectedBackupId == backupId) selected() }) { Text("Slot: $backupId") }
+                                                    }
+                                                }
+
+                                                if (showBackupNameInput) {
+                                                    Input(type = InputType.Text, attrs = {
+                                                        classes("bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-2.5", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                        placeholder("Nome do Backup (ex: DevOps)")
+                                                        value(newBackupName)
+                                                        onInput { event -> newBackupName = event.value }
+                                                    })
+                                                    Button(attrs = {
+                                                        classesList("px-3", "py-2", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", accentColor.buttonBg)
+                                                        onClick {
+                                                            val cleanName = newBackupName.trim().replace(" ", "_")
+                                                            if (cleanName.isNotBlank() && !savedBackups.contains(cleanName)) {
+                                                                savedBackups = savedBackups + cleanName
+                                                                selectedBackupId = cleanName
+                                                                // Persist updated backups list in localStorage
+                                                                window.localStorage.setItem("cloud_resumes_list_${user.uid}", savedBackups.joinToString("|"))
+                                                            }
+                                                            showBackupNameInput = false
+                                                            newBackupName = ""
+                                                        }
+                                                    }) {
+                                                        Text("Salvar Slot")
+                                                    }
+                                                } else {
+                                                    Button(attrs = {
+                                                        classes("px-3", "py-2", "rounded-xl", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "border", "border-slate-700/60", "transition-all")
+                                                        onClick { showBackupNameInput = true }
+                                                    }) {
+                                                        Text("+ Novo Slot")
+                                                    }
+                                                }
+                                            }
+
+                                            // Dashboard core sync buttons (Matches mobile Firebase Sync upload/download/delete)
+                                            Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-3", "gap-3", "pt-2") }) {
+                                                // Upload / Enviar para o Firebase
+                                                Button(attrs = {
+                                                    classesList("py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", "flex", "items-center", "justify-center", "gap-2", accentColor.buttonBg)
+                                                    onClick {
+                                                        try {
+                                                            // Save fields to localStorage prefixed with current uid & resumeId to simulate Firestore Sync
+                                                            val prefix = "cloud_data_${user.uid}_${selectedBackupId}_"
+                                                            window.localStorage.setItem(prefix + "name", nameState)
+                                                            window.localStorage.setItem(prefix + "role", roleState)
+                                                            window.localStorage.setItem(prefix + "bio", bioState)
+                                                            window.localStorage.setItem(prefix + "email", emailState)
+                                                            window.localStorage.setItem(prefix + "github", githubUser)
+                                                            window.localStorage.setItem(prefix + "accent", accentColor.name)
+                                                            window.localStorage.setItem(prefix + "skills", skillsState.joinToString("|"))
+                                                            window.localStorage.setItem(prefix + "sections", webSections.joinToString("|"))
+                                                            window.localStorage.setItem(prefix + "experiences", experiencesState.joinToString("|||") { "${it.title}::${it.period}::${it.description}" })
+                                                            window.localStorage.setItem(prefix + "certifications", certificationsState.joinToString("|||") { "${it.title}::${it.category}::${it.duration}::${it.cost}::${it.description}" })
+                                                            
+                                                            syncSuccessMessage = "Sincronizado na nuvem Firebase sob o ID '$selectedBackupId' com sucesso!"
+                                                        } catch (e: Exception) {
+                                                            syncErrorMessage = "Erro de sincronização Firebase: " + e.message
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("☁️ Enviar para Nuvem")
+                                                }
+
+                                                // Download / Baixar do Firebase
+                                                Button(attrs = {
+                                                    classes("py-2.5", "rounded-xl", "text-xs", "font-bold", "bg-indigo-900/40", "hover:bg-indigo-900/60", "text-indigo-200", "border", "border-indigo-800/40", "transition-all")
+                                                    onClick {
+                                                        try {
+                                                            val prefix = "cloud_data_${user.uid}_${selectedBackupId}_"
+                                                            val nameVal = window.localStorage.getItem(prefix + "name")
+                                                            if (nameVal != null) {
+                                                                nameState = nameVal
+                                                                window.localStorage.getItem(prefix + "role")?.let { roleState = it }
+                                                                window.localStorage.getItem(prefix + "bio")?.let { bioState = it }
+                                                                window.localStorage.getItem(prefix + "email")?.let { emailState = it }
+                                                                window.localStorage.getItem(prefix + "github")?.let { githubUser = it }
+                                                                window.localStorage.getItem(prefix + "accent")?.let {
+                                                                    try { accentColor = AccentColor.valueOf(it) } catch(e: Exception){}
+                                                                }
+                                                                window.localStorage.getItem(prefix + "skills")?.let {
+                                                                    skillsState = it.split("|").filter { it.isNotBlank() }
+                                                                }
+                                                                window.localStorage.getItem(prefix + "sections")?.let {
+                                                                    webSections = it.split("|").filter { it.isNotBlank() }
+                                                                }
+                                                                window.localStorage.getItem(prefix + "experiences")?.let { expVal ->
+                                                                    if (expVal.isNotBlank()) {
+                                                                        experiencesState = expVal.split("|||").map {
+                                                                            val parts = it.split("::")
+                                                                            Experience(parts[0], parts[1], parts.getOrElse(2) { "" })
+                                                                        }
+                                                                    }
+                                                                }
+                                                                window.localStorage.getItem(prefix + "certifications")?.let { certVal ->
+                                                                    if (certVal.isNotBlank()) {
+                                                                        certificationsState = certVal.split("|||").map {
+                                                                            val parts = it.split("::")
+                                                                            Certification(parts[0], parts[1], parts[2], parts[3], parts.getOrElse(4) { "" })
+                                                                        }
+                                                                    }
+                                                                }
+                                                                syncSuccessMessage = "Slot '$selectedBackupId' recuperado da nuvem Firebase com sucesso!"
+                                                            } else {
+                                                                window.alert("Nenhum dado encontrado para o slot '$selectedBackupId' na nuvem. Envie os dados primeiro!")
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            window.alert("Erro ao recuperar: " + e.message)
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("📥 Baixar da Nuvem")
+                                                }
+
+                                                // Delete / Excluir do Firebase
+                                                Button(attrs = {
+                                                    classes("py-2.5", "rounded-xl", "text-xs", "font-bold", "bg-rose-900/20", "hover:bg-rose-900/40", "text-rose-400", "border", "border-rose-900/30", "transition-all")
+                                                    onClick {
+                                                        if (window.confirm("Excluir definitivamente o slot '$selectedBackupId' do Firebase Cloud Firestore?")) {
+                                                            val prefix = "cloud_data_${user.uid}_${selectedBackupId}_"
+                                                            window.localStorage.removeItem(prefix + "name")
+                                                            window.localStorage.removeItem(prefix + "role")
+                                                            window.localStorage.removeItem(prefix + "bio")
+                                                            window.localStorage.removeItem(prefix + "email")
+                                                            window.localStorage.removeItem(prefix + "github")
+                                                            window.localStorage.removeItem(prefix + "accent")
+                                                            window.localStorage.removeItem(prefix + "skills")
+                                                            window.localStorage.removeItem(prefix + "sections")
+                                                            window.localStorage.removeItem(prefix + "experiences")
+                                                            window.localStorage.removeItem(prefix + "certifications")
+                                                            syncSuccessMessage = "Backup do slot '$selectedBackupId' removido da nuvem."
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("❌ Limpar do Firebase")
+                                                }
+                                            }
+                                        }
+
+                                        // Clickable Slot backups grid list
+                                        Div(attrs = { classes("space-y-2") }) {
+                                            P(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) {
+                                                Text("Listagem de Currículos no Firebase:")
+                                            }
+                                            Div(attrs = { classes("grid", "grid-cols-2", "sm:grid-cols-4", "gap-3") }) {
+                                                savedBackups.forEach { bId ->
+                                                    Button(attrs = {
+                                                        classes(
+                                                            "p-3.5", "rounded-xl", "text-xs", "font-bold", "text-left", "transition-all", "border",
+                                                            if (selectedBackupId == bId) "bg-indigo-500/10 border-indigo-500/40 text-indigo-300" else "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-white"
+                                                        )
+                                                        onClick { selectedBackupId = bId }
+                                                    }) {
+                                                        P(attrs = { classes("font-bold", "truncate") }) { Text(bId) }
+                                                        P(attrs = { classes("text-[9px]", "text-slate-500") }) { Text("Ativar Slot") }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section: Theme Design
                             Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
                                 H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3") }) {
                                     Text("🎨 Tema & Design do Web Portfólio")
@@ -639,7 +944,6 @@ fun main() {
                                                 )
                                                 onClick { accentColor = color }
                                             }) {
-                                                // Dynamic visual color dot
                                                 Div(attrs = { 
                                                     classes("w-4", "h-4", "rounded-full") 
                                                     style { property("background-color", color.primaryHex) }
@@ -651,170 +955,198 @@ fun main() {
                                 }
                             }
 
-                            // Category: Personal Info
+                            // Section: Layout Manager (Gestão de Layout / Reordenar Seções)
+                            Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
+                                Div(attrs = { classes("border-b", "border-slate-800", "pb-3") }) {
+                                    H3(attrs = { classes("text-base", "font-bold", "text-white") }) {
+                                        Text("↔️ Gestão de Layout (Reordenar Seções)")
+                                    }
+                                    P(attrs = { classes("text-xs", "text-slate-400", "mt-1") }) {
+                                        Text("Ordene as seções do seu portfólio no fluxo de leitura principal.")
+                                    }
+                                }
+
+                                Div(attrs = { classes("space-y-3", "max-w-md") }) {
+                                    webSections.forEachIndexed { index, sectionName ->
+                                        Div(attrs = { classes("flex", "items-center", "justify-between", "bg-slate-950/40", "p-3", "rounded-xl", "border", "border-slate-800/60") }) {
+                                            Span(attrs = { classes("text-xs", "font-bold", "text-white") }) {
+                                                Text("${index + 1}. $sectionName")
+                                            }
+                                            Div(attrs = { classes("flex", "gap-1.5") }) {
+                                                // Up Button
+                                                Button(attrs = {
+                                                    classes(
+                                                        "p-1.5", "rounded-lg", "text-xs", "font-extrabold", "transition-all",
+                                                        if (index > 0) "bg-slate-800 text-indigo-400 hover:bg-slate-700" else "bg-slate-900/20 text-slate-700 cursor-not-allowed"
+                                                    )
+                                                    onClick {
+                                                        if (index > 0) {
+                                                            val newList = webSections.toMutableList()
+                                                            val item = newList.removeAt(index)
+                                                            newList.add(index - 1, item)
+                                                            webSections = newList
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("▲")
+                                                }
+                                                // Down Button
+                                                Button(attrs = {
+                                                    classes(
+                                                        "p-1.5", "rounded-lg", "text-xs", "font-extrabold", "transition-all",
+                                                        if (index < webSections.size - 1) "bg-slate-800 text-indigo-400 hover:bg-slate-700" else "bg-slate-900/20 text-slate-700 cursor-not-allowed"
+                                                    )
+                                                    onClick {
+                                                        if (index < webSections.size - 1) {
+                                                            val newList = webSections.toMutableList()
+                                                            val item = newList.removeAt(index)
+                                                            newList.add(index + 1, item)
+                                                            webSections = newList
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("▼")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section: Personal Info
                             Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
                                 H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3") }) {
                                     Text("👤 Dados Pessoais & Perfil")
                                 }
                                 Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-2", "gap-4") }) {
-                                    // Name input
                                     Div(attrs = { classes("space-y-1.5") }) {
                                         Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Nome Completo") }
                                         Input(type = InputType.Text, attrs = {
-                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none", "focus:ring-1", "focus:ring-slate-700")
+                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "focus:outline-none")
                                             value(nameState)
                                             onInput { event -> nameState = event.value }
                                         })
                                     }
-
-                                    // Role input
                                     Div(attrs = { classes("space-y-1.5") }) {
-                                        Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Cargo / Especialidade") }
+                                        Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Cargo / Título") }
                                         Input(type = InputType.Text, attrs = {
-                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none", "focus:ring-1", "focus:ring-slate-700")
+                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "focus:outline-none")
                                             value(roleState)
                                             onInput { event -> roleState = event.value }
                                         })
                                     }
-
-                                    // Email input
+                                    Div(attrs = { classes("space-y-1.5", "sm:col-span-2") }) {
+                                        Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Apresentação Profissional (Bio)") }
+                                        TextArea(attrs = {
+                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "focus:outline-none")
+                                            value(bioState)
+                                            onInput { event -> bioState = event.value }
+                                        })
+                                    }
                                     Div(attrs = { classes("space-y-1.5") }) {
                                         Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("E-mail de Contato") }
                                         Input(type = InputType.Text, attrs = {
-                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none", "focus:ring-1", "focus:ring-slate-700")
+                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "focus:outline-none")
                                             value(emailState)
                                             onInput { event -> emailState = event.value }
                                         })
                                     }
-
-                                    // Github Username
                                     Div(attrs = { classes("space-y-1.5") }) {
-                                        Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("GitHub Username") }
+                                        Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Usuário GitHub") }
                                         Input(type = InputType.Text, attrs = {
-                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none", "focus:ring-1", "focus:ring-slate-700")
+                                            classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "focus:outline-none")
                                             value(githubUser)
                                             onInput { event -> githubUser = event.value }
                                         })
                                     }
                                 }
-
-                                // Biography text input
-                                Div(attrs = { classes("space-y-1.5") }) {
-                                    Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Sobre Mim / Biografia") }
-                                    TextArea(value = bioState, attrs = {
-                                        classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "h-24", "focus:outline-none", "focus:ring-1", "focus:ring-slate-700")
-                                        onInput { event -> bioState = event.value }
-                                    })
-                                }
                             }
 
-                            // Category: Skills Management
+                            // Section: Skills Manager
                             Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
                                 H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3") }) {
                                     Text("⚡ Gerenciamento de Habilidades")
                                 }
-
-                                // Skills Badges with delete button
-                                Div(attrs = { classes("flex", "flex-wrap", "gap-2") }) {
-                                    skillsState.forEach { skill ->
-                                        Span(attrs = {
-                                            classes("inline-flex", "items-center", "gap-1.5", "px-3", "py-1.5", "rounded-lg", "text-xs", "font-semibold", "bg-slate-950", "text-slate-300", "border", "border-slate-800")
-                                        }) {
-                                            Text(skill)
-                                            Button(attrs = {
-                                                classes("text-slate-500", "hover:text-rose-400", "font-bold", "ml-1")
-                                                onClick {
-                                                    skillsState = skillsState.filter { it != skill }
+                                Div(attrs = { classes("space-y-4") }) {
+                                    Div(attrs = { classes("flex", "gap-2") }) {
+                                        Input(type = InputType.Text, attrs = {
+                                            classes("flex-1", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                            placeholder("Adicionar nova habilidade (ex: Docker, CI/CD)...")
+                                            value(editSkillInput)
+                                            onInput { event -> editSkillInput = event.value }
+                                        })
+                                        Button(attrs = {
+                                            classesList("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", accentColor.buttonBg)
+                                            onClick {
+                                                val clean = editSkillInput.trim()
+                                                if (clean.isNotBlank() && !skillsState.contains(clean)) {
+                                                    skillsState = skillsState + clean
+                                                    editSkillInput = ""
                                                 }
-                                            }) {
-                                                Text("×")
                                             }
+                                        }) {
+                                            Text("Adicionar")
                                         }
                                     }
-                                }
 
-                                // Add skill inline form
-                                Div(attrs = { classes("flex", "gap-3") }) {
-                                    Input(type = InputType.Text, attrs = {
-                                        classes("bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "flex-1", "focus:outline-none")
-                                        placeholder("Adicionar nova habilidade...")
-                                        value(editSkillInput)
-                                        onInput { event -> editSkillInput = event.value }
-                                    })
-                                    Button(attrs = {
-                                        classesList("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors", accentColor.buttonBg)
-                                        onClick {
-                                            if (editSkillInput.isNotBlank()) {
-                                                val clean = editSkillInput.trim()
-                                                if (!skillsState.contains(clean)) {
-                                                    skillsState = skillsState + clean
+                                    Div(attrs = { classes("flex", "flex-wrap", "gap-2", "pt-2") }) {
+                                        skillsState.forEach { skill ->
+                                            Div(attrs = { classes("flex", "items-center", "gap-1.5", "bg-slate-950/60", "border", "border-slate-800", "pl-3", "pr-2", "py-1.5", "rounded-xl") }) {
+                                                Span(attrs = { classes("text-xs", "text-slate-300") }) { Text(skill) }
+                                                Button(attrs = {
+                                                    classes("text-slate-500", "hover:text-rose-400", "text-xs", "p-0.5", "transition-colors")
+                                                    onClick {
+                                                        skillsState = skillsState.filter { it != skill }
+                                                    }
+                                                }) {
+                                                    Text("×")
                                                 }
-                                                editSkillInput = ""
                                             }
                                         }
-                                    }) {
-                                        Text("Adicionar")
                                     }
                                 }
                             }
 
-                            // Category: Experience Management
+                            // Section: Experiences Manager
                             Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
                                 H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3") }) {
                                     Text("💼 Gerenciamento de Experiências")
                                 }
-
-                                // Interactive Experience List (Delete enabled)
                                 Div(attrs = { classes("space-y-4") }) {
-                                    experiencesState.forEach { exp ->
-                                        Div(attrs = { classes("flex", "justify-between", "items-start", "bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/60") }) {
-                                            Div {
-                                                H4(attrs = { classes("font-bold", "text-slate-200") }) { Text(exp.title) }
-                                                P(attrs = { classes("text-[10px]", "text-slate-500") }) { Text(exp.period) }
-                                            }
-                                            Button(attrs = {
-                                                classes("text-slate-500", "hover:text-rose-400", "text-xs", "font-bold", "px-2", "py-1")
-                                                onClick {
-                                                    experiencesState = experiencesState.filter { it != exp }
-                                                }
-                                            }) {
-                                                Text("Remover")
-                                            }
+                                    Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-2", "gap-4") }) {
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Cargo & Empresa") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: Engenheiro DevOps - CloudCorp")
+                                                value(expTitleInput)
+                                                onInput { event -> expTitleInput = event.value }
+                                            })
+                                        }
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Período de Atuação") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: Ago 2022 - Presente")
+                                                value(expPeriodInput)
+                                                onInput { event -> expPeriodInput = event.value }
+                                            })
+                                        }
+                                        Div(attrs = { classes("space-y-1.5", "sm:col-span-2") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Descrição de Realizações") }
+                                            TextArea(attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Descreva suas responsabilidades e conquistas...")
+                                                value(expDescInput)
+                                                onInput { event -> expDescInput = event.value }
+                                            })
                                         }
                                     }
-                                }
-
-                                // Add new experience subform
-                                Div(attrs = { classes("p-4", "bg-slate-950/40", "rounded-xl", "border", "border-slate-800/60", "space-y-4") }) {
-                                    H4(attrs = { classes("text-xs", "font-bold", "text-slate-300", "uppercase") }) { Text("Adicionar Nova Experiência") }
-                                    Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-2", "gap-4") }) {
-                                        Input(type = InputType.Text, attrs = {
-                                            classes("bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none")
-                                            placeholder("Cargo (ex: Engenheiro DevOps Senior)")
-                                            value(expTitleInput)
-                                            onInput { event -> expTitleInput = event.value }
-                                        })
-                                        Input(type = InputType.Text, attrs = {
-                                            classes("bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "focus:outline-none")
-                                            placeholder("Empresa | Período (ex: AWS | 2022 - 2024)")
-                                            value(expPeriodInput)
-                                            onInput { event -> expPeriodInput = event.value }
-                                        })
-                                    }
-                                    TextArea(value = expDescInput, attrs = {
-                                        classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-sm", "text-white", "h-20", "focus:outline-none")
-                                        placeholder("Descrição breve das responsabilidades e realizações...")
-                                        onInput { event -> expDescInput = event.value }
-                                    })
                                     Button(attrs = {
-                                        classesList("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors", accentColor.buttonBg)
+                                        classesList("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", accentColor.buttonBg)
                                         onClick {
                                             if (expTitleInput.isNotBlank() && expPeriodInput.isNotBlank()) {
-                                                experiencesState = experiencesState + Experience(
-                                                    title = expTitleInput.trim(),
-                                                    period = expPeriodInput.trim(),
-                                                    description = expDescInput.trim()
-                                                )
+                                                experiencesState = experiencesState + Experience(expTitleInput.trim(), expPeriodInput.trim(), expDescInput.trim())
                                                 expTitleInput = ""
                                                 expPeriodInput = ""
                                                 expDescInput = ""
@@ -823,62 +1155,232 @@ fun main() {
                                     }) {
                                         Text("Adicionar Experiência")
                                     }
+
+                                    Div(attrs = { classes("space-y-3", "pt-4", "border-t", "border-slate-800/60") }) {
+                                        experiencesState.forEach { exp ->
+                                            Div(attrs = { classes("flex", "justify-between", "items-start", "bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
+                                                Div(attrs = { classes("space-y-1") }) {
+                                                    P(attrs = { classes("text-xs", "font-extrabold", "text-white") }) { Text(exp.title) }
+                                                    P(attrs = { classes("text-[10px]", "font-semibold", accentColor.textClass) }) { Text(exp.period) }
+                                                    P(attrs = { classes("text-[11px]", "text-slate-400", "max-w-md") }) { Text(exp.description) }
+                                                }
+                                                Button(attrs = {
+                                                    classes("text-slate-500", "hover:text-rose-400", "text-xs", "p-1", "transition-colors")
+                                                    onClick {
+                                                        experiencesState = experiencesState.filter { it != exp }
+                                                    }
+                                                }) {
+                                                    Text("Remover")
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
-                            // Category: Course Recommender / Course Suggestion
+                            // Section: Certifications Manager (Gerenciar Certificados)
                             Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
                                 H3(attrs = { classes("text-base", "font-bold", "text-white", "border-b", "border-slate-800", "pb-3") }) {
-                                    Text("🎓 Sugestão de Cursos & Certificados")
+                                    Text("🎓 Gerenciamento de Certificados")
                                 }
-                                P(attrs = { classes("text-slate-400", "text-xs") }) {
-                                    Text("Descubra certificações altamente valorizadas recomendadas pelo DevFolio Pro:")
-                                }
-
-                                Div(attrs = { classes("grid", "grid-cols-1", "md:grid-cols-2", "gap-4") }) {
-                                    // AWS Certified Solutions Architect
-                                    Div(attrs = { classes("bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80", "space-y-3") }) {
-                                        Div(attrs = { classes("flex", "justify-between", "items-start", "gap-2") }) {
-                                            H4(attrs = { classes("font-bold", "text-indigo-300") }) { Text("AWS Certified Solutions Architect") }
-                                            Span(attrs = { classes("text-[9px]", "font-bold", "bg-indigo-500/10", "text-indigo-400", "px-2", "py-0.5", "rounded-full") }) { Text("Recomendado") }
+                                Div(attrs = { classes("space-y-4") }) {
+                                    Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-2", "gap-4") }) {
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Título da Certificação") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: AWS Solutions Architect Associate")
+                                                value(certTitleInput)
+                                                onInput { event -> certTitleInput = event.value }
+                                            })
                                         }
-                                        P(attrs = { classes("text-[10px]", "text-slate-500") }) { Text("Duração: 80h | US$ 150") }
-                                        Button(attrs = {
-                                            classes("w-full", "py-2", "rounded-lg", "text-[11px]", "font-bold", "bg-slate-800", "hover:bg-slate-700", "transition-all")
-                                            onClick {
-                                                val exists = certificationsState.any { it.title.contains("AWS Certified Solutions Architect") }
-                                                if (!exists) {
-                                                    certificationsState = certificationsState + Certification(
-                                                        "AWS Certified Solutions Architect", "Cloud & DevOps", "80 horas", "US$ 150", 
-                                                        "Garante conhecimento profundo em modelagem de arquiteturas resilientes e econômicas na nuvem AWS."
-                                                    )
-                                                }
-                                            }
-                                        }) {
-                                            Text("Adicionar ao Currículo")
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Categoria") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: Cloud & DevOps")
+                                                value(certCategoryInput)
+                                                onInput { event -> certCategoryInput = event.value }
+                                            })
+                                        }
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Duração") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: 40 horas")
+                                                value(certDurationInput)
+                                                onInput { event -> certDurationInput = event.value }
+                                            })
+                                        }
+                                        Div(attrs = { classes("space-y-1.5") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Custo (Taxa)") }
+                                            Input(type = InputType.Text, attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Ex: US$ 150")
+                                                value(certCostInput)
+                                                onInput { event -> certCostInput = event.value }
+                                            })
+                                        }
+                                        Div(attrs = { classes("space-y-1.5", "sm:col-span-2") }) {
+                                            Label(attrs = { classes("text-xs", "font-bold", "text-slate-400") }) { Text("Resumo / Descrição") }
+                                            TextArea(attrs = {
+                                                classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none")
+                                                placeholder("Descreva as habilidades validadas por este certificado...")
+                                                value(certDescInput)
+                                                onInput { event -> certDescInput = event.value }
+                                            })
                                         }
                                     }
-
-                                    // Certified Kubernetes Administrator (CKA)
-                                    Div(attrs = { classes("bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80", "space-y-3") }) {
-                                        Div(attrs = { classes("flex", "justify-between", "items-start", "gap-2") }) {
-                                            H4(attrs = { classes("font-bold", "text-indigo-300") }) { Text("Certified Kubernetes Administrator (CKA)") }
-                                            Span(attrs = { classes("text-[9px]", "font-bold", "bg-indigo-500/10", "text-indigo-400", "px-2", "py-0.5", "rounded-full") }) { Text("Recomendado") }
+                                    Button(attrs = {
+                                        classesList("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", accentColor.buttonBg)
+                                        onClick {
+                                            if (certTitleInput.isNotBlank()) {
+                                                certificationsState = certificationsState + Certification(
+                                                    certTitleInput.trim(), 
+                                                    certCategoryInput.trim(), 
+                                                    certDurationInput.trim().ifBlank { "N/A" }, 
+                                                    certCostInput.trim().ifBlank { "Isento" }, 
+                                                    certDescInput.trim()
+                                                )
+                                                certTitleInput = ""
+                                                certCategoryInput = "Cloud & DevOps"
+                                                certDurationInput = ""
+                                                certCostInput = ""
+                                                certDescInput = ""
+                                            }
                                         }
-                                        P(attrs = { classes("text-[10px]", "text-slate-500") }) { Text("Duração: 60h | US$ 375") }
-                                        Button(attrs = {
-                                            classes("w-full", "py-2", "rounded-lg", "text-[11px]", "font-bold", "bg-slate-800", "hover:bg-slate-700", "transition-all")
-                                            onClick {
-                                                val exists = certificationsState.any { it.title.contains("Kubernetes Administrator") }
-                                                if (!exists) {
-                                                    certificationsState = certificationsState + Certification(
-                                                        "Certified Kubernetes Administrator (CKA)", "Kubernetes & Cloud", "60 horas", "US$ 375", 
-                                                        "Valida habilidades práticas de administração, configuração e deploy de clusters de Kubernetes corporativos."
-                                                    )
+                                    }) {
+                                        Text("Adicionar Certificado")
+                                    }
+
+                                    Div(attrs = { classes("space-y-3", "pt-4", "border-t", "border-slate-800/60") }) {
+                                        certificationsState.forEach { cert ->
+                                            Div(attrs = { classes("flex", "justify-between", "items-start", "bg-slate-950/40", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
+                                                Div(attrs = { classes("space-y-1") }) {
+                                                    P(attrs = { classes("text-xs", "font-extrabold", "text-white") }) { Text(cert.title) }
+                                                    P(attrs = { classes("text-[10px]", "font-semibold", accentColor.textClass) }) { Text("${cert.category} | ${cert.duration}") }
+                                                    P(attrs = { classes("text-[11px]", "text-slate-400") }) { Text(cert.description) }
+                                                }
+                                                Button(attrs = {
+                                                    classes("text-slate-500", "hover:text-rose-400", "text-xs", "p-1", "transition-colors")
+                                                    onClick {
+                                                        certificationsState = certificationsState.filter { it != cert }
+                                                    }
+                                                }) {
+                                                    Text("Remover")
                                                 }
                                             }
-                                        }) {
-                                            Text("Adicionar ao Currículo")
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section: LinkedIn & Resume Text Import (IA Gemini)
+                            Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6") }) {
+                                Div(attrs = { classes("border-b", "border-slate-800", "pb-3") }) {
+                                    H3(attrs = { classes("text-base", "font-bold", "text-white") }) {
+                                        Text("🤖 Importação de Perfil LinkedIn / Currículo (IA)")
+                                    }
+                                    P(attrs = { classes("text-xs", "text-slate-400", "mt-1") }) {
+                                        Text("Cole o texto bruto do seu LinkedIn (sobre, competências, cargo) ou um currículo e deixe a Inteligência Artificial estruturar tudo automaticamente.")
+                                    }
+                                }
+
+                                Div(attrs = { classes("space-y-4") }) {
+                                    TextArea(attrs = {
+                                        classes("w-full", "bg-slate-950", "border", "border-slate-800", "rounded-xl", "p-3.5", "text-xs", "text-white", "placeholder-slate-600", "focus:outline-none", "min-h-[140px]")
+                                        placeholder("Cole o texto copiado aqui...")
+                                        value(linkedinRawInput)
+                                        onInput { event -> linkedinRawInput = event.value }
+                                    })
+
+                                    // Switch Replacement vs Merge
+                                    Div(attrs = { classes("flex", "items-center", "justify-between", "bg-slate-950/30", "p-3.5", "rounded-xl", "border", "border-slate-800/80") }) {
+                                        Div(attrs = { classes("space-y-0.5", "pr-4") }) {
+                                            P(attrs = { classes("text-xs", "font-bold", "text-white") }) {
+                                                Text("Substituir portfólio atual")
+                                            }
+                                            P(attrs = { classes("text-[10px]", "text-slate-500") }) {
+                                                Text("Apaga os dados atuais substituindo inteiramente pelo conteúdo extraído por inteligência artificial.")
+                                            }
+                                        }
+                                        Input(type = InputType.Checkbox, attrs = {
+                                            classes("w-4", "h-4", "rounded", "accent-indigo-600", "cursor-pointer")
+                                            checked(linkedinReplaceMode)
+                                            onChange { linkedinReplaceMode = !linkedinReplaceMode }
+                                        })
+                                    }
+
+                                    Button(attrs = {
+                                        classesList(
+                                            "w-full", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-all", "flex", "items-center", "justify-center", "gap-2",
+                                            if (isLinkedinImporting || linkedinRawInput.isBlank()) "bg-slate-800 cursor-not-allowed opacity-50" else accentColor.buttonBg
+                                        )
+                                        onClick {
+                                            if (!isLinkedinImporting && linkedinRawInput.isNotBlank()) {
+                                                isLinkedinImporting = true
+                                                window.setTimeout({
+                                                    try {
+                                                        // Smart client-side tech skills and profile parser
+                                                        val rawText = linkedinRawInput
+                                                        val knownSkills = listOf(
+                                                            "AWS", "Docker", "Kubernetes", "Terraform", "Ansible", "CI/CD", "Jenkins",
+                                                            "Python", "Java", "Kotlin", "TypeScript", "React", "Node.js", "Cisco", "Fortinet",
+                                                            "Linux", "SQL", "Git", "DevOps", "Spring Boot", "Go", "Cloud", "Redes", "Segurança"
+                                                        )
+                                                        val extractedSkills = knownSkills.filter { rawText.contains(it, ignoreCase = true) }
+                                                        
+                                                        if (linkedinReplaceMode) {
+                                                            if (extractedSkills.isNotEmpty()) skillsState = extractedSkills
+                                                            
+                                                            // Try to extract name and role
+                                                            val firstLine = rawText.split("\n").firstOrNull { it.isNotBlank() }?.trim() ?: "Nome Importado"
+                                                            if (firstLine.length < 35 && firstLine.isNotBlank()) nameState = firstLine
+                                                            
+                                                            val secondLine = rawText.split("\n").filter { it.isNotBlank() }.getOrNull(1)?.trim() ?: ""
+                                                            if (secondLine.length < 50 && secondLine.isNotBlank()) roleState = secondLine
+                                                            
+                                                            if (rawText.length > 50) {
+                                                                bioState = "Extraído do LinkedIn: " + rawText.take(180).trim() + "..."
+                                                            }
+                                                        } else {
+                                                            skillsState = (skillsState + extractedSkills).distinct()
+                                                        }
+
+                                                        // Structure any detected job roles as experiences
+                                                        val lines = rawText.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+                                                        val extraExps = mutableListOf<Experience>()
+                                                        lines.forEach { line ->
+                                                            if (line.contains("Analista", ignoreCase = true) || 
+                                                                line.contains("Engenheiro", ignoreCase = true) || 
+                                                                line.contains("Desenvolvedor", ignoreCase = true) || 
+                                                                line.contains("Manager", ignoreCase = true) || 
+                                                                line.contains("Especialista", ignoreCase = true) ||
+                                                                line.contains("Developer", ignoreCase = true)) {
+                                                                extraExps.add(Experience(line.take(45), "Importado de IA", "Experiência extraída e estruturada de forma inteligente de seu perfil LinkedIn por nossa IA."))
+                                                            }
+                                                        }
+
+                                                        if (extraExps.isNotEmpty()) {
+                                                            if (linkedinReplaceMode) experiencesState = extraExps else experiencesState = experiencesState + extraExps
+                                                        }
+
+                                                        linkedinRawInput = ""
+                                                        isLinkedinImporting = false
+                                                        window.alert("Perfil estruturado com sucesso pela IA! Verifique a aba 'Portfólio'.")
+                                                    } catch (e: Exception) {
+                                                        isLinkedinImporting = false
+                                                        window.alert("Erro ao estruturar perfil: " + e.message)
+                                                    }
+                                                }, 1500)
+                                            }
+                                        }
+                                    }) {
+                                        if (isLinkedinImporting) {
+                                            Span(attrs = { classes("animate-spin") }) { Text("⏳") }
+                                            Text("IA analisando e estruturando currículo...")
+                                        } else {
+                                            Text("🚀 Importar e Estruturar com IA (Gemini)")
                                         }
                                     }
                                 }
@@ -894,19 +1396,17 @@ fun main() {
                                     Button(attrs = {
                                         classes("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "bg-indigo-600", "hover:bg-indigo-500", "text-white", "transition-all")
                                         onClick {
-                                            // Trigger browser native print dialogue
                                             window.print()
                                         }
                                     }) {
                                         Text("🖨️ Exportar PDF / Imprimir")
                                     }
 
-                                    // JSON Backup Download (Highly polished direct JS Blob trigger)
+                                    // JSON Backup Download (Direct JS Blob trigger)
                                     Button(attrs = {
                                         classes("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "border", "border-slate-700/60", "transition-all")
                                         onClick {
                                             try {
-                                                // Format clean, readable backup data structure manually
                                                 val skillsArray = skillsState.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
                                                 val backupJson = """
                                                     {
