@@ -180,6 +180,13 @@ fun main() {
         var coachSuggestions by remember { mutableStateOf("") }
         var coachMissingSkills by remember { mutableStateOf(emptyList<String>()) }
         var coachSuccessFeedback by remember { mutableStateOf(false) }
+        var coachSuggestedRole by remember { mutableStateOf("") }
+        var coachSuggestedBio by remember { mutableStateOf("") }
+        var coachSuggestedCompany by remember { mutableStateOf("") }
+        var coachSuggestedJobRole by remember { mutableStateOf("") }
+        var coachSuggestedExpDesc by remember { mutableStateOf("") }
+        var coachSuggestedExpOrigDesc by remember { mutableStateOf("") }
+        var copySuccessText by remember { mutableStateOf<String?>(null) }
 
         // Profile Editor Inputs (Temporary holder state for settings editing)
         var editSkillInput by remember { mutableStateOf("") }
@@ -545,31 +552,67 @@ fun main() {
                                                         coachMatchScore = 72
                                                         coachSuggestions = "Seu portfólio tem excelentes bases de Cloud e Redes, mas para DevOps é altamente recomendado demonstrar conhecimento direto em IaC (Infraestrutura como Código) e GitOps para automatização de deployments."
                                                         coachMissingSkills = listOf("Terraform", "GitOps (ArgoCD)", "Prometheus", "Helm")
+                                                        coachSuggestedRole = "Sênior Cloud & DevOps Engineer"
+                                                        coachSuggestedBio = "Especialista DevOps com sólida experiência em automação de infraestrutura híbrida corporativa, design de arquiteturas AWS escaláveis, segurança em redes Cisco/Fortinet e implantação de orquestradores de contêineres como Kubernetes (EKS) utilizando práticas de GitOps e IaC (Terraform)."
+                                                        coachSuggestedCompany = "Tech Solution Corp"
+                                                        coachSuggestedJobRole = "Engenheiro DevOps Specialist"
+                                                        coachSuggestedExpDesc = "Automatizei e gerenciei o ciclo de vida completo de deploys e infraestrutura corporativa na AWS com Terraform (IaC) e Helm, integrando segurança de borda Fortinet e migrando microsserviços legados para arquitetura de contêineres Kubernetes com GitOps."
+                                                        coachSuggestedExpOrigDesc = "Criação de máquinas na AWS, configuração de redes corporativas Cisco e segurança básica de servidores Linux."
                                                     }
                                                     "Desenvolvedor Back-end" -> {
                                                         coachMatchScore = 65
                                                         coachSuggestions = "Muito bom conhecimento geral em redes e Kubernetes, mas para atuar como Back-end faltam linguagens e frameworks típicos de aplicações corporativas, além de filas/mensageria."
                                                         coachMissingSkills = listOf("Spring Boot", "PostgreSQL", "Redis", "gRPC")
+                                                        coachSuggestedRole = "Desenvolvedor Back-end Sênior | Java & Spring Boot"
+                                                        coachSuggestedBio = "Engenheiro de Software especializado no desenvolvimento de APIs de alta performance com Spring Boot, Java e Go, orquestração de contêineres via Kubernetes e implementação de mensageria com Redis e Apache Kafka para arquiteturas distribuídas e resilientes."
+                                                        coachSuggestedCompany = "Global Tech Corp"
+                                                        coachSuggestedJobRole = "Desenvolvedor Back-end Sênior"
+                                                        coachSuggestedExpDesc = "Construí APIs altamente disponíveis no back-end corporativo utilizando Spring Boot, Go e PostgreSQL, implementando filas assíncronas com mensageria distribuída para processamento de transações em tempo real e deploys escaláveis em infraestrutura Kubernetes."
+                                                        coachSuggestedExpOrigDesc = "Desenvolvimento de APIs internas simples, manutenção de scripts e monitoramento básico de servidores."
                                                     }
                                                     "Desenvolvedor Front-end" -> {
                                                         coachMatchScore = 58
                                                         coachSuggestions = "O portfólio tem foco extremo em Cloud e redes. Para atuar no Front-end de alto nível, sugerimos reforçar conhecimento em frameworks reativos modernos de CSS e SPA/SSR."
                                                         coachMissingSkills = listOf("TypeScript", "Tailwind CSS", "Next.js", "Redux Toolkit")
+                                                        coachSuggestedRole = "Desenvolvedor Front-end Specialist | React & Next.js"
+                                                        coachSuggestedBio = "Desenvolvedor focado em interfaces modernas de altíssimo desempenho com React, Next.js e TypeScript, estilizadas com Tailwind CSS e integrando estados globais complexos para portfólios e dashboards corporativos responsivos."
+                                                        coachSuggestedCompany = "Creative Web Solutions"
+                                                        coachSuggestedJobRole = "Desenvolvedor Front-end Specialist"
+                                                        coachSuggestedExpDesc = "Liderei o desenvolvimento de interfaces responsivas para painéis corporativos complexos usando React, Next.js e TypeScript, garantindo otimização de SEO de ponta a ponta e integração direta com APIs RESTful no back-end."
+                                                        coachSuggestedExpOrigDesc = "Criação de páginas web corporativas estáticas, suporte básico de CSS e customização de templates."
                                                     }
                                                     "Desenvolvedor Full-stack" -> {
                                                         coachMatchScore = 60
                                                         coachSuggestions = "Você tem bases ótimas de infraestrutura e conteinerização. Um desenvolvedor fullstack moderno precisa balancear isso com bibliotecas robustas de banco de dados e componentização."
                                                         coachMissingSkills = listOf("PostgreSQL", "TypeScript", "Next.js", "Docker")
+                                                        coachSuggestedRole = "Desenvolvedor Full-stack Sênior | Node.js & React"
+                                                        coachSuggestedBio = "Engenheiro Full-stack especializado na modelagem de microsserviços integrados no back-end e desenvolvimento de interfaces fluidas e dinâmicas com React e TypeScript no front-end, operando com excelência em Docker e Kubernetes."
+                                                        coachSuggestedCompany = "Digital Enterprise Inc"
+                                                        coachSuggestedJobRole = "Desenvolvedor Full-stack Sênior"
+                                                        coachSuggestedExpDesc = "Desenvolvi aplicações web completas ponta a ponta, implementando APIs RESTful seguras no back-end em Node.js e telas modernas com React e Tailwind, garantindo integração com bancos relacionais e contêineres Docker."
+                                                        coachSuggestedExpOrigDesc = "Desenvolvimento de páginas administrativas simples, scripts shell e manutenção em bancos SQL locais."
                                                     }
                                                     "Analista de Infraestrutura" -> {
                                                         coachMatchScore = 95
                                                         coachSuggestions = "Excepcional aderência à vaga de Infraestrutura! Você domina redes Fortinet, Cisco, Linux e AWS. Sugerimos apenas focar em boas práticas de governança de TI e virtualização local."
                                                         coachMissingSkills = listOf("Virtualização (VMware)", "AWS Cloud", "Linux Administration", "Fortinet Firewalls")
+                                                        coachSuggestedRole = "Arquiteto de Infraestrutura, Cloud & SecOps Sênior"
+                                                        coachSuggestedBio = "Especialista sênior certificado Cisco e Fortinet, focado no design de arquiteturas de rede hibridas resilientes, administração profunda de servidores Linux RedHat/CentOS e securitização física e lógica contra ameaças virtuais."
+                                                        coachSuggestedCompany = "Core Telecom & Security"
+                                                        coachSuggestedJobRole = "Arquiteto de Infraestrutura SecOps"
+                                                        coachSuggestedExpDesc = "Planejei e executei o redesign completo da rede corporativa multizona integrando switches Cisco e firewalls Fortinet de alta disponibilidade, reduzindo vulnerabilidades em 95% e mantendo infraestrutura Linux/AWS sob auditoria de conformidade."
+                                                        coachSuggestedExpOrigDesc = "Instalação física de roteadores, suporte básico a usuários de rede e configuração inicial de firewalls."
                                                     }
                                                     else -> {
                                                         coachMatchScore = 70
                                                         coachSuggestions = "Kotlin/Jetpack Compose já constam em suas habilidades, o que é ótimo para Mobile! Sugerimos expandir para multiplataforma geral de forma a maximizar sua portabilidade."
                                                         coachMissingSkills = listOf("Kotlin Multiplatform", "SwiftUI", "Jetpack Compose", "App Store Deployment")
+                                                        coachSuggestedRole = "Desenvolvedor Mobile Kotlin / KMP Specialist"
+                                                        coachSuggestedBio = "Engenheiro Mobile apaixonado por desenvolvimento multiplataforma nativo utilizando Kotlin Multiplatform (KMP), Compose Multiplatform e SwiftUI, aplicando Clean Architecture e Jetpack Compose na plataforma Android."
+                                                        coachSuggestedCompany = "Mobile First Studio"
+                                                        coachSuggestedJobRole = "Engenheiro Mobile Sênior"
+                                                        coachSuggestedExpDesc = "Construí e lancei aplicativos móveis escaláveis de alta fidelidade com Jetpack Compose e SwiftUI, projetando camadas modulares em Kotlin Multiplatform (KMP) e gerenciando pipelines automatizados de publicação para Google Play e App Store."
+                                                        coachSuggestedExpOrigDesc = "Desenvolvimento de pequenos módulos em Android nativo com layouts clássicos e testes manuais de aplicativos."
                                                     }
                                                 }
                                             }, 1200)
@@ -590,6 +633,13 @@ fun main() {
                                 Div(attrs = { classes("bg-slate-900/60", "rounded-2xl", "p-6", "border", "border-slate-800", "space-y-6", "animate-fade-in") }) {
                                     H3(attrs = { classes("text-lg", "font-bold", "text-white", "flex", "items-center", "gap-2") }) {
                                         Text("🔍 Resultado do Coach de IA para: $coachSelectedRole")
+                                    }
+
+                                    // Floating Copy Success Toast
+                                    if (copySuccessText != null) {
+                                        Div(attrs = { classes("bg-emerald-500/10", "border", "border-emerald-500/30", "text-emerald-300", "p-3.5", "rounded-xl", "text-xs", "font-bold", "flex", "items-center", "justify-center", "gap-2") }) {
+                                            Text("📋 " + copySuccessText!!)
+                                        }
                                     }
 
                                     // Match Score Indicator
@@ -614,13 +664,125 @@ fun main() {
                                         }
                                     }
 
-                                    // Written Suggestions Card
+                                    // Written Suggestions Card with individual Copy text
                                     Div(attrs = { classes("space-y-2") }) {
-                                        P(attrs = { classes("text-xs", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider") }) {
-                                            Text("💡 Sugestões de Melhorias:")
+                                        Div(attrs = { classes("flex", "justify-between", "items-center") }) {
+                                            P(attrs = { classes("text-xs", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider") }) {
+                                                Text("💡 Sugestões de Melhorias:")
+                                            }
+                                            Button(attrs = {
+                                                classes("text-[10px]", "font-bold", "text-indigo-400", "hover:text-indigo-300", "bg-slate-800", "px-2.5", "py-1", "rounded-md", "transition-colors")
+                                                onClick {
+                                                    window.navigator.clipboard.writeText(coachSuggestions)
+                                                    copySuccessText = "Sugestões de melhorias copiadas!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
+                                                }
+                                            }) {
+                                                Text("📋 Copiar Texto")
+                                            }
                                         }
                                         P(attrs = { classes("text-sm", "text-slate-300", "leading-relaxed", "bg-slate-950/20", "p-4", "rounded-xl", "border", "border-slate-800/80") }) {
                                             Text(coachSuggestions)
+                                        }
+                                    }
+
+                                    // Título & Resumo Otimizado (Before vs Suggested)
+                                    Div(attrs = { classes("bg-slate-950/30", "p-5", "rounded-xl", "border", "border-slate-800/80", "space-y-4") }) {
+                                        H4(attrs = { classes("text-xs", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider", "flex", "items-center", "gap-1.5") }) {
+                                            Text("👤 Otimização de Título & Resumo")
+                                        }
+                                        Div(attrs = { classes("grid", "grid-cols-1", "md:grid-cols-2", "gap-4") }) {
+                                            // Before (Current)
+                                            Div(attrs = { classes("space-y-2", "opacity-75") }) {
+                                                P(attrs = { classes("text-[10px]", "font-bold", "text-slate-500") }) { Text("Antes (Atual):") }
+                                                P(attrs = { classes("text-xs", "font-bold", "text-white") }) { Text(roleState) }
+                                                P(attrs = { classes("text-[11px]", "text-slate-400", "leading-relaxed") }) { Text(bioState) }
+                                            }
+                                            // After (Suggested)
+                                            Div(attrs = { classes("space-y-2", "border-t", "md:border-t-0", "md:border-l", "border-slate-800/80", "pt-4", "md:pt-0", "md:pl-4") }) {
+                                                P(attrs = { classes("text-[10px]", "font-bold", accentColor.textClass) }) { Text("Depois (Sugerido por IA):") }
+                                                P(attrs = { classes("text-xs", "font-bold", "text-emerald-400") }) { Text(coachSuggestedRole) }
+                                                P(attrs = { classes("text-[11px]", "text-slate-300", "leading-relaxed") }) { Text(coachSuggestedBio) }
+                                            }
+                                        }
+                                        // Action buttons
+                                        Div(attrs = { classes("flex", "flex-col", "sm:flex-row", "gap-2.5", "pt-2") }) {
+                                            Button(attrs = {
+                                                classes("flex-1", "py-2", "rounded-lg", "text-xs", "font-bold", "bg-indigo-600/20", "hover:bg-indigo-600/40", "text-indigo-300", "border", "border-indigo-500/20", "transition-all")
+                                                onClick {
+                                                    roleState = coachSuggestedRole
+                                                    bioState = coachSuggestedBio
+                                                    copySuccessText = "Título e Resumo aplicados com sucesso!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
+                                                }
+                                            }) {
+                                                Text("✍️ Substituir Dados no Portfólio")
+                                            }
+                                            Button(attrs = {
+                                                classes("py-2", "px-4", "rounded-lg", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "transition-all")
+                                                onClick {
+                                                    val copyText = "Cargo Alvo: $coachSuggestedRole\nResumo:\n$coachSuggestedBio"
+                                                    window.navigator.clipboard.writeText(copyText)
+                                                    copySuccessText = "Título e Bio copiados!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
+                                                }
+                                            }) {
+                                                Text("📋 Copiar Texto")
+                                            }
+                                        }
+                                    }
+
+                                    // Experiência Otimizada (Before vs Suggested)
+                                    if (coachSuggestedCompany.isNotBlank()) {
+                                        Div(attrs = { classes("bg-slate-950/30", "p-5", "rounded-xl", "border", "border-slate-800/80", "space-y-4") }) {
+                                            H4(attrs = { classes("text-xs", "font-extrabold", "text-slate-400", "uppercase", "tracking-wider") }) {
+                                                Text("💼 Experiência Otimizada por IA")
+                                            }
+                                            Div(attrs = { classes("space-y-3") }) {
+                                                P(attrs = { classes("text-xs", "font-bold", "text-white") }) {
+                                                    Text(coachSuggestedCompany + " • " + coachSuggestedJobRole)
+                                                }
+                                                Div(attrs = { classes("grid", "grid-cols-1", "md:grid-cols-2", "gap-4") }) {
+                                                    Div(attrs = { classes("space-y-1.5", "opacity-75") }) {
+                                                        P(attrs = { classes("text-[10px]", "font-bold", "text-slate-500") }) { Text("Descrição Atual:") }
+                                                        P(attrs = { classes("text-[11px]", "text-slate-400", "leading-relaxed") }) { Text(coachSuggestedExpOrigDesc) }
+                                                    }
+                                                    Div(attrs = { classes("space-y-1.5", "border-t", "md:border-t-0", "md:border-l", "border-slate-800/80", "pt-3", "md:pt-0", "md:pl-4") }) {
+                                                        P(attrs = { classes("text-[10px]", "font-bold", accentColor.textClass) }) { Text("Descrição Otimizada por IA:") }
+                                                        P(attrs = { classes("text-[11px]", "text-slate-300", "leading-relaxed") }) { Text(coachSuggestedExpDesc) }
+                                                    }
+                                                }
+                                            }
+                                            // Action buttons
+                                            Div(attrs = { classes("flex", "flex-col", "sm:flex-row", "gap-2.5", "pt-2") }) {
+                                                Button(attrs = {
+                                                    classes("flex-1", "py-2", "rounded-lg", "text-xs", "font-bold", "bg-indigo-600/20", "hover:bg-indigo-600/40", "text-indigo-300", "border", "border-indigo-500/20", "transition-all")
+                                                    onClick {
+                                                        val updatedExps = experiencesState.toMutableList()
+                                                        val existingIndex = updatedExps.indexOfFirst { it.company.contains(coachSuggestedCompany, ignoreCase = true) || it.role.contains(coachSuggestedJobRole, ignoreCase = true) }
+                                                        if (existingIndex >= 0) {
+                                                            updatedExps[existingIndex] = Experience(coachSuggestedJobRole, updatedExps[existingIndex].period, coachSuggestedExpDesc)
+                                                        } else {
+                                                            updatedExps.add(Experience(coachSuggestedJobRole, "Atual", coachSuggestedExpDesc))
+                                                        }
+                                                        experiencesState = updatedExps
+                                                        copySuccessText = "Experiência atualizada no portfólio!"
+                                                        window.setTimeout({ copySuccessText = null }, 2000)
+                                                    }
+                                                }) {
+                                                    Text("✍️ Substituir Experiência no Portfólio")
+                                                }
+                                                Button(attrs = {
+                                                    classes("py-2", "px-4", "rounded-lg", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "transition-all")
+                                                    onClick {
+                                                        window.navigator.clipboard.writeText("Empresa: $coachSuggestedCompany\nCargo: $coachSuggestedJobRole\nDescrição Otimizada: $coachSuggestedExpDesc")
+                                                        copySuccessText = "Experiência copiada!"
+                                                        window.setTimeout({ copySuccessText = null }, 2000)
+                                                    }
+                                                }) {
+                                                    Text("📋 Copiar Texto")
+                                                }
+                                            }
                                         }
                                     }
 
@@ -641,7 +803,7 @@ fun main() {
                                     }
 
                                     // CTA to Auto-Apply Improvements
-                                    Div(attrs = { classes("pt-2") }) {
+                                    Div(attrs = { classes("space-y-3", "pt-4", "border-t", "border-slate-800/80") }) {
                                         if (coachSuccessFeedback) {
                                             Div(attrs = { classes("bg-emerald-500/10", "border", "border-emerald-500/20", "text-emerald-300", "p-3", "rounded-xl", "text-center", "text-xs", "font-bold") }) {
                                                 Text("✅ Habilidades incorporadas com sucesso! Verifique a aba 'Portfólio'.")
@@ -650,14 +812,78 @@ fun main() {
                                             Button(attrs = {
                                                 classes("w-full", "py-3", "rounded-xl", "text-xs", "font-bold", "bg-emerald-600", "hover:bg-emerald-500", "text-white", "transition-all")
                                                 onClick {
-                                                    // Merge missing skills and trigger feedback
                                                     val currentSet = skillsState.toSet()
                                                     val newSet = currentSet + coachMissingSkills
                                                     skillsState = newSet.toList()
                                                     coachSuccessFeedback = true
+                                                    copySuccessText = "Habilidades recomendadas adicionadas!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
                                                 }
                                             }) {
                                                 Text("✨ Aplicar Sugestões de Habilidades no Currículo")
+                                            }
+                                        }
+
+                                        // Global Actions Card
+                                        Div(attrs = { classes("grid", "grid-cols-1", "sm:grid-cols-2", "gap-3", "pt-1") }) {
+                                            Button(attrs = {
+                                                classes("py-3", "rounded-xl", "text-xs", "font-bold", "bg-indigo-600", "hover:bg-indigo-500", "text-white", "transition-all")
+                                                onClick {
+                                                    // Apply ALL improvements
+                                                    // Role & Bio
+                                                    roleState = coachSuggestedRole
+                                                    bioState = coachSuggestedBio
+                                                    // Skills
+                                                    val currentSet = skillsState.toSet()
+                                                    val newSet = currentSet + coachMissingSkills
+                                                    skillsState = newSet.toList()
+                                                    // Experience
+                                                    val updatedExps = experiencesState.toMutableList()
+                                                    val existingIndex = updatedExps.indexOfFirst { it.company.contains(coachSuggestedCompany, ignoreCase = true) || it.role.contains(coachSuggestedJobRole, ignoreCase = true) }
+                                                    if (existingIndex >= 0) {
+                                                        updatedExps[existingIndex] = Experience(coachSuggestedJobRole, updatedExps[existingIndex].period, coachSuggestedExpDesc)
+                                                    } else {
+                                                        updatedExps.add(Experience(coachSuggestedJobRole, "Atual", coachSuggestedExpDesc))
+                                                    }
+                                                    experiencesState = updatedExps
+                                                    
+                                                    coachSuccessFeedback = true
+                                                    copySuccessText = "Todas as melhorias aplicadas!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
+                                                }
+                                            }) {
+                                                Text("⚡ Aplicar Todas as Sugestões")
+                                            }
+
+                                            Button(attrs = {
+                                                classes("py-3", "rounded-xl", "text-xs", "font-bold", "bg-slate-800", "hover:bg-slate-700", "text-slate-300", "border", "border-slate-700/60", "transition-all")
+                                                onClick {
+                                                    val completeReport = """
+                                                        === RELATÓRIO DO COACH DE CARREIRA IA ===
+                                                        Vaga Alvo: $coachSelectedRole
+                                                        Match Score: $coachMatchScore%
+                                                        
+                                                        SUGESTÕES GERAIS:
+                                                        $coachSuggestions
+                                                        
+                                                        HABILIDADES RECOMENDADAS:
+                                                        ${coachMissingSkills.joinToString(", ")}
+                                                        
+                                                        TÍTULO & RESUMO SUGERIDOS:
+                                                        Novo Título: $coachSuggestedRole
+                                                        Novo Resumo: $coachSuggestedBio
+                                                        
+                                                        EXPERIÊNCIA RECOMENDADA:
+                                                        Empresa/Cargo: $coachSuggestedCompany - $coachSuggestedJobRole
+                                                        Descrição Otimizada: $coachSuggestedExpDesc
+                                                    """.trimIndent()
+                                                    
+                                                    window.navigator.clipboard.writeText(completeReport)
+                                                    copySuccessText = "Relatório completo de IA copiado!"
+                                                    window.setTimeout({ copySuccessText = null }, 2000)
+                                                }
+                                            }) {
+                                                Text("📋 Copiar Relatório Completo")
                                             }
                                         }
                                     }
@@ -724,7 +950,7 @@ fun main() {
                                                         Text(user.email)
                                                     }
                                                     Span(attrs = { 
-                                                        classes(
+                                                        classesList(
                                                             "mt-1", "inline-block", "px-2", "py-0.5", "rounded-full", "text-[10px]", "font-bold",
                                                             if (user.isSimulated) "bg-amber-500/10 text-amber-300 border border-amber-500/20" else "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
                                                         ) 
@@ -975,7 +1201,7 @@ fun main() {
                                             Div(attrs = { classes("flex", "gap-1.5") }) {
                                                 // Up Button
                                                 Button(attrs = {
-                                                    classes(
+                                                    classesList(
                                                         "p-1.5", "rounded-lg", "text-xs", "font-extrabold", "transition-all",
                                                         if (index > 0) "bg-slate-800 text-indigo-400 hover:bg-slate-700" else "bg-slate-900/20 text-slate-700 cursor-not-allowed"
                                                     )
@@ -992,7 +1218,7 @@ fun main() {
                                                 }
                                                 // Down Button
                                                 Button(attrs = {
-                                                    classes(
+                                                    classesList(
                                                         "p-1.5", "rounded-lg", "text-xs", "font-extrabold", "transition-all",
                                                         if (index < webSections.size - 1) "bg-slate-800 text-indigo-400 hover:bg-slate-700" else "bg-slate-900/20 text-slate-700 cursor-not-allowed"
                                                     )
