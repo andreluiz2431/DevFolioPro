@@ -162,16 +162,23 @@ class PortfolioRepository(
         profile: ProfileEntity,
         skills: List<SkillEntity>,
         experiences: List<ExperienceEntity>,
-        repos: List<GithubRepo>
+        repos: List<GithubRepo>,
+        jobDescription: String? = null
     ): ResumeImprovements? {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
             throw IllegalStateException("Chave API do Gemini não configurada.")
         }
 
+        val jobDescSection = if (!jobDescription.isNullOrBlank()) {
+            "\n            5. Descrição Detalhada da Vaga Desejada (Oportunidade Alvo):\n            $jobDescription\n"
+        } else {
+            ""
+        }
+
         val prompt = """
-            Você é um especialista em recrutamento técnico de TI (Tech Recruiter) e coach de carreira.
-            Sua missão é analisar o currículo/portfólio atual do usuário e gerar sugestões personalizadas de melhoria focadas especificamente na vaga alvo: "$targetRole".
+            Você é um especialista em recrutamento técnico de TI (Tech Recruiter) e coach de carreira de alta performance.
+            Sua missão é analisar o currículo/portfólio atual do usuário e gerar sugestões personalizadas de melhoria focadas especificamente na vaga alvo: "$targetRole"${if (!jobDescription.isNullOrBlank()) " e nos requisitos e responsabilidades descritos para a vaga." else "."}
 
             Aqui estão as informações atuais do usuário:
             
@@ -187,14 +194,17 @@ class PortfolioRepository(
             
             4. Repositórios do GitHub (Projetos do Portfólio):
                ${repos.joinToString("\n") { "- ${it.name} (Linguagem: ${it.language ?: "N/A"}, Estrelas: ${it.stargazersCount}): ${it.description ?: ""}" }}
+            $jobDescSection
 
             Seu objetivo é gerar um JSON com sugestões de otimização de acordo com as seguintes regras:
             
-            1. `improvedProfile`: Reescreva o título profissional (`role`) e a biografia (`bio`) de modo a destacar palavras-chave e competências diretamente ligadas ao cargo alvo "$targetRole", mantendo a veracidade das experiências dele. A bio reescrita deve ser profissional, chamativa e de alto impacto (aproximadamente 3-4 linhas).
+            1. `improvedProfile`: Reescreva o título profissional (`role`) e a biografia (`bio`) de modo a destacar palavras-chave e competências diretamente ligadas ao cargo alvo "$targetRole"${if (!jobDescription.isNullOrBlank()) " e à descrição da vaga" else ""}, mantendo a veracidade das experiências dele. A bio reescrita deve ser profissional, chamativa e de alto impacto (aproximadamente 3-4 linhas).
+               - ATENÇÃO CRÍTICA (NÃO MINTA): Não altere o nível hierárquico real ou cargo do usuário para mentir sobre o seu nível atual. Por exemplo, se ele é "Analista 1" ou "Desenvolvedor Júnior" e a vaga alvo é "Analista 3" ou "Desenvolvedor Sênior", você NÃO DEVE mentir mudando o título dele para "Analista 3" ou "Sênior". Em vez disso, reescreva o título ou bio de forma a ressaltar que ele atua/tem competência com foco nas tecnologias e práticas buscadas (por exemplo, "Analista de Sistemas focado em [Tecnologia]") sem atribuir-lhe falsamente uma senioridade superior.
             
-            2. `recommendedSkills`: Sugira de 3 a 5 tecnologias ou metodologias altamente recomendadas para esta vaga alvo "$targetRole" que o usuário ainda não possui na lista dele ou que seriam excelentes complementos. Indique para cada uma o nome, a categoria ("Desenvolvimento" ou "Infraestrutura") e uma breve justificativa de 1 frase explicando por que ela é valorizada para essa vaga.
+            2. `recommendedSkills`: Sugira de 3 a 5 tecnologias ou metodologias altamente recomendadas para esta vaga alvo "$targetRole"${if (!jobDescription.isNullOrBlank()) " e descrição de vaga" else ""} que o usuário ainda não possui na lista dele ou que seriam excelentes complementos. Indique para cada uma o nome, a categoria ("Desenvolvimento" ou "Infraestrutura") e uma breve justificativa de 1 frase explicando por que ela é valorizada para essa vaga.
             
-            3. `improvedExperiences`: Para cada uma das experiências do usuário, reescreva a descrição para que fique focada em realizações e conquistas técnicas, usando termos relevantes para a vaga de "$targetRole". Mantenha exatamente o mesmo nome da empresa (`company`), cargo (`role`) e período (`period`) correspondentes às originais para permitir a associação.
+            3. `improvedExperiences`: Para cada uma das experiências do usuário, reescreva a descrição para que fique focada em realizações e conquistas técnicas, usando termos relevantes para a vaga de "$targetRole"${if (!jobDescription.isNullOrBlank()) " e a descrição da vaga fornecida" else ""}. Mantenha exatamente o mesmo nome da empresa (`company`), cargo (`role`) e período (`period`) correspondentes às originais para permitir a associação.
+               - ATENÇÃO CRÍTICA (NÃO MINTA): Nunca altere os cargos reais ou minta sobre as responsabilidades de experiências passadas. Dê forte ênfase nas atividades que o usuário já exerce ou exerceu que se comparam, assemelham ou são diretamente relevantes para a vaga de interesse, demonstrando maturidade técnica nas atividades reais exercidas.
             
             Retorne estritamente o seguinte formato JSON, sem marcações markdown ou blocos adicionais (responda APENAS o JSON puro):
 
@@ -224,6 +234,7 @@ class PortfolioRepository(
             - Responda apenas com o JSON válido.
             - Seja extremamente realista e encorajador.
             - Não invente empresas ou empregos falsos que o usuário não realizou. Apenas reescreva e otimize os dados existentes.
+            - Respeite rigorosamente a veracidade: NUNCA minta sobre cargos ou níveis que o usuário não possui.
         """.trimIndent()
 
         val request = GeminiContentRequest(

@@ -59,6 +59,7 @@ fun ResumeCoachScreen(
     
     var selectedRole by remember { mutableStateOf("") }
     var customRoleInput by remember { mutableStateOf("") }
+    var jobDescriptionInput by remember { mutableStateOf("") }
     
     // Track accepted items locally for visual feedback
     var profileAccepted by remember { mutableStateOf(false) }
@@ -204,13 +205,40 @@ fun ResumeCoachScreen(
                         }
 
                         item {
-                            val activeRole = selectedRole.ifBlank { customRoleInput }
+                            Text(
+                                text = "2. Descrição de Vaga Específica (Texto Longo - Opcional):",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = jobDescriptionInput,
+                                onValueChange = { jobDescriptionInput = it },
+                                label = { Text("Cole aqui a descrição completa da vaga ofertada pela empresa...") },
+                                leadingIcon = { Icon(Icons.Default.Description, null) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .testTag("job_description_input"),
+                                maxLines = 8,
+                                singleLine = false
+                            )
+                        }
+
+                        item {
+                            val rawRole = selectedRole.ifBlank { customRoleInput }
+                            val activeRole = rawRole.ifBlank {
+                                if (jobDescriptionInput.isNotBlank()) "Vaga de interesse (conforme descrição)" else ""
+                            }
                             Button(
                                 onClick = {
                                     if (activeRole.isBlank()) {
-                                        Toast.makeText(context, "Selecione ou digite um cargo alvo!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Selecione um cargo ou insira a descrição de uma vaga!", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        viewModel.generateResumeImprovements(activeRole)
+                                        viewModel.generateResumeImprovements(activeRole, jobDescriptionInput.ifBlank { null })
                                     }
                                 },
                                 modifier = Modifier
@@ -283,9 +311,12 @@ fun ResumeCoachScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
                             onClick = {
-                                val activeRole = selectedRole.ifBlank { customRoleInput }
+                                val rawRole = selectedRole.ifBlank { customRoleInput }
+                                val activeRole = rawRole.ifBlank {
+                                    if (jobDescriptionInput.isNotBlank()) "Vaga de interesse (conforme descrição)" else ""
+                                }
                                 if (activeRole.isNotBlank()) {
-                                    viewModel.generateResumeImprovements(activeRole)
+                                    viewModel.generateResumeImprovements(activeRole, jobDescriptionInput.ifBlank { null })
                                 } else {
                                     viewModel.resetResumeCoachState()
                                 }

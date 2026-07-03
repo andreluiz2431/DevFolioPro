@@ -623,7 +623,7 @@ class PortfolioViewModel(
         _resumeCoachState.value = ResumeCoachUiState.Idle
     }
 
-    fun generateResumeImprovements(targetRole: String) {
+    fun generateResumeImprovements(targetRole: String, jobDescription: String? = null) {
         val currentProfile = profile.value
         val currentSkills = skills.value
         val currentExperiences = experiences.value
@@ -640,7 +640,8 @@ class PortfolioViewModel(
                     profile = currentProfile,
                     skills = currentSkills,
                     experiences = currentExperiences,
-                    repos = githubRepos
+                    repos = githubRepos,
+                    jobDescription = jobDescription
                 )
                 if (results != null) {
                     _resumeCoachState.value = ResumeCoachUiState.Success(results)
