@@ -19,7 +19,7 @@ COPY . .
 
 # Build the JS Browser Production Distribution
 # This runs dead-code elimination (DCE), code optimization and bundling
-RUN gradle :web:jsBrowserProductionDistribution --no-daemon --stacktrace
+RUN gradle :web:jsBrowserDistribution --no-daemon --stacktrace
 
 # ==========================================
 # STAGE 2: Run Production Node.js Server
