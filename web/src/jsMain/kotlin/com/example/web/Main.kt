@@ -12,6 +12,12 @@ import org.w3c.files.BlobPropertyBag
 import org.w3c.dom.url.URL
 import com.example.shared.SharedConstants
 
+fun AttrsScope<*>.classesList(vararg classStrings: String) {
+    classStrings.forEach { str ->
+        classes(*str.split(' ').filter { it.isNotBlank() }.toTypedArray())
+    }
+}
+
 data class Experience(
     val title: String,
     val period: String,
@@ -174,8 +180,7 @@ fun main() {
                     // Logo and Platform Title
                     Div(attrs = { classes("flex", "items-center", "gap-3") }) {
                         Div(attrs = { 
-                            classes("w-10", "h-10", "rounded-xl", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "font-black", "text-white")
-                            classes(*accentColor.bgGradient.split(' ').toTypedArray())
+                            classesList("w-10", "h-10", "rounded-xl", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "font-black", "text-white", accentColor.bgGradient)
                         }) {
                             Text("D")
                         }
@@ -196,8 +201,7 @@ fun main() {
                             // User is signed-in (Simulated Firebase Sync Status)
                             Div(attrs = { classes("flex", "items-center", "gap-3", "bg-slate-950/60", "p-2", "rounded-xl", "border", "border-slate-800") }) {
                                 Div(attrs = { 
-                                    classes("w-8", "h-8", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white") 
-                                    classes(*accentColor.bgGradient.split(' ').toTypedArray())
+                                    classesList("w-8", "h-8", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white", accentColor.bgGradient) 
                                 }) {
                                     Text(user.name.take(1).uppercase())
                                 }
@@ -238,7 +242,7 @@ fun main() {
                 Div(attrs = { classes("max-w-4xl", "mx-auto", "px-6", "flex", "gap-2") }) {
                     // Portfólio Tab
                     Button(attrs = {
-                        classes(
+                        classesList(
                             "px-4", "py-2.5", "rounded-xl", "text-sm", "font-bold", "transition-all", "flex", "items-center", "gap-2",
                             if (selectedTab == "portfolio") "bg-slate-900 text-white border border-slate-800 shadow-lg" else "text-slate-400 hover:text-white"
                         )
@@ -249,7 +253,7 @@ fun main() {
 
                     // AI Resume Coach Tab (Melhorias)
                     Button(attrs = {
-                        classes(
+                        classesList(
                             "px-4", "py-2.5", "rounded-xl", "text-sm", "font-bold", "transition-all", "flex", "items-center", "gap-2",
                             if (selectedTab == "coach") "bg-slate-900 text-white border border-slate-800 shadow-lg" else "text-slate-400 hover:text-white"
                         )
@@ -263,7 +267,7 @@ fun main() {
 
                     // Ajustes/Configurações Tab
                     Button(attrs = {
-                        classes(
+                        classesList(
                             "px-4", "py-2.5", "rounded-xl", "text-sm", "font-bold", "transition-all", "flex", "items-center", "gap-2",
                             if (selectedTab == "settings") "bg-slate-900 text-white border border-slate-800 shadow-lg" else "text-slate-400 hover:text-white"
                         )
@@ -471,7 +475,7 @@ fun main() {
                                 }
 
                                 Button(attrs = {
-                                    classes(
+                                    classesList(
                                         "w-full", "py-3.5", "rounded-xl", "text-sm", "font-bold", "text-white", 
                                         "transition-all", "flex", "items-center", "justify-center", "gap-2",
                                         if (isCoachAnalyzing) "bg-slate-800 cursor-not-allowed" else "bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/10"
@@ -629,7 +633,7 @@ fun main() {
                                     Div(attrs = { classes("grid", "grid-cols-2", "sm:grid-cols-5", "gap-3") }) {
                                         AccentColor.values().forEach { color ->
                                             Button(attrs = {
-                                                classes(
+                                                classesList(
                                                     "p-3", "rounded-xl", "text-xs", "font-bold", "transition-all", "border", "flex", "flex-col", "items-center", "gap-1.5",
                                                     if (accentColor == color) "border-white bg-slate-800 text-white shadow-md shadow-white/5" else "border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white"
                                                 )
@@ -738,8 +742,7 @@ fun main() {
                                         onInput { event -> editSkillInput = event.value }
                                     })
                                     Button(attrs = {
-                                        classes("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
-                                        classes(*accentColor.buttonBg.split(' ').toTypedArray())
+                                        classesList("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors", accentColor.buttonBg)
                                         onClick {
                                             if (editSkillInput.isNotBlank()) {
                                                 val clean = editSkillInput.trim()
@@ -804,8 +807,7 @@ fun main() {
                                         onInput { event -> expDescInput = event.value }
                                     })
                                     Button(attrs = {
-                                        classes("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
-                                        classes(*accentColor.buttonBg.split(' ').toTypedArray())
+                                        classesList("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors", accentColor.buttonBg)
                                         onClick {
                                             if (expTitleInput.isNotBlank() && expPeriodInput.isNotBlank()) {
                                                 experiencesState = experiencesState + Experience(
@@ -987,8 +989,7 @@ fun main() {
                                 Text("Cancelar")
                             }
                             Button(attrs = {
-                                classes("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
-                                classes(*accentColor.buttonBg.split(' ').toTypedArray())
+                                classesList("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors", accentColor.buttonBg)
                                 onClick {
                                     if (authNameInput.isNotBlank() && authEmailInput.isNotBlank()) {
                                         currentUser = WebUser(authNameInput.trim(), authEmailInput.trim())
