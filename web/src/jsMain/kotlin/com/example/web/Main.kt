@@ -174,10 +174,8 @@ fun main() {
                     // Logo and Platform Title
                     Div(attrs = { classes("flex", "items-center", "gap-3") }) {
                         Div(attrs = { 
-                            classes(
-                                "w-10", "h-10", "rounded-xl", "bg-gradient-to-tr", 
-                                accentColor.bgGradient, "flex", "items-center", "justify-center", "font-black", "text-white"
-                            )
+                            classes("w-10", "h-10", "rounded-xl", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "font-black", "text-white")
+                            classes(*accentColor.bgGradient.split(' ').toTypedArray())
                         }) {
                             Text("D")
                         }
@@ -198,10 +196,8 @@ fun main() {
                             // User is signed-in (Simulated Firebase Sync Status)
                             Div(attrs = { classes("flex", "items-center", "gap-3", "bg-slate-950/60", "p-2", "rounded-xl", "border", "border-slate-800") }) {
                                 Div(attrs = { 
-                                    classes(
-                                        "w-8", "h-8", "rounded-full", "bg-gradient-to-tr", 
-                                        accentColor.bgGradient, "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white"
-                                    ) 
+                                    classes("w-8", "h-8", "rounded-full", "bg-gradient-to-tr", "flex", "items-center", "justify-center", "text-xs", "font-bold", "text-white") 
+                                    classes(*accentColor.bgGradient.split(' ').toTypedArray())
                                 }) {
                                     Text(user.name.take(1).uppercase())
                                 }
@@ -742,7 +738,8 @@ fun main() {
                                         onInput { event -> editSkillInput = event.value }
                                     })
                                     Button(attrs = {
-                                        classes("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", accentColor.buttonBg, "transition-colors")
+                                        classes("px-5", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
+                                        classes(*accentColor.buttonBg.split(' ').toTypedArray())
                                         onClick {
                                             if (editSkillInput.isNotBlank()) {
                                                 val clean = editSkillInput.trim()
@@ -807,7 +804,8 @@ fun main() {
                                         onInput { event -> expDescInput = event.value }
                                     })
                                     Button(attrs = {
-                                        classes("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", accentColor.buttonBg, "transition-colors")
+                                        classes("px-5", "py-2.5", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
+                                        classes(*accentColor.buttonBg.split(' ').toTypedArray())
                                         onClick {
                                             if (expTitleInput.isNotBlank() && expPeriodInput.isNotBlank()) {
                                                 experiencesState = experiencesState + Experience(
@@ -989,7 +987,8 @@ fun main() {
                                 Text("Cancelar")
                             }
                             Button(attrs = {
-                                classes("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", accentColor.buttonBg, "transition-colors")
+                                classes("flex-1", "py-3", "rounded-xl", "text-xs", "font-bold", "text-white", "transition-colors")
+                                classes(*accentColor.buttonBg.split(' ').toTypedArray())
                                 onClick {
                                     if (authNameInput.isNotBlank() && authEmailInput.isNotBlank()) {
                                         currentUser = WebUser(authNameInput.trim(), authEmailInput.trim())
