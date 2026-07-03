@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.BuildConfig
+import com.example.data.local.entities.CertificateEntity
 import com.example.data.local.entities.ExperienceEntity
 import com.example.data.local.entities.ProfileEntity
 import com.example.data.local.entities.SectionOrderEntity
@@ -40,6 +41,7 @@ import com.example.data.local.entities.SkillEntity
 import com.example.ui.theme.toColor
 import com.example.ui.viewmodel.PortfolioViewModel
 import com.example.ui.viewmodel.LinkedInImportUiState
+import com.example.ui.viewmodel.CertificateRecommendationsUiState
 import com.example.utils.ImageUtils
 import com.example.ui.viewmodel.FirebaseSyncUiState
 import com.example.ui.viewmodel.ConflictResolution
@@ -71,6 +73,11 @@ enum class SettingsCategory(
         title = "Exportação",
         description = "Gere PDFs de alta qualidade ou baixe backups do currículo.",
         icon = Icons.Default.Download
+    ),
+    CERTIFICATE_RECOMMENDER(
+        title = "Sugestão de Cursos",
+        description = "Descubra certificados relevantes com base nas suas habilidades.",
+        icon = Icons.Default.School
     )
 }
 
@@ -146,6 +153,7 @@ fun SettingsScreen(
     val profile by viewModel.profile.collectAsState()
     val skills by viewModel.skills.collectAsState()
     val experiences by viewModel.experiences.collectAsState()
+    val certificates by viewModel.certificates.collectAsState()
     val sections by viewModel.sectionOrders.collectAsState()
 
     val primaryColor = themeSettings.primaryColorHex.toColor()
@@ -168,13 +176,13 @@ fun SettingsScreen(
                         .padding(vertical = 12.dp)
                 ) {
                     Text(
-                        text = "Painel de Controle",
+                        text = "Painel de Serviços",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Gerencie as configurações visuais, os dados do currículo e sincronizações na nuvem.",
+                        text = "Gerencie dados, personalize temas visuais e descubra novas certificações para acelerar sua carreira.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -221,6 +229,18 @@ fun SettingsScreen(
                             category = SettingsCategory.EXPORT,
                             primaryColor = primaryColor,
                             onClick = { currentCategory = SettingsCategory.EXPORT },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    // Row 3
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CategoryCard(
+                            category = SettingsCategory.CERTIFICATE_RECOMMENDER,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.CERTIFICATE_RECOMMENDER },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -367,6 +387,20 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    // Certificates Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Gerenciar Certificados & Conquistas",
+                            icon = Icons.Default.WorkspacePremium,
+                            primaryColor = primaryColor
+                        ) {
+                            CertificatesSettings(
+                                certificates = certificates,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
                 }
                 SettingsCategory.DESIGN_THEME -> {
                     // Theme Engine Settings
@@ -442,6 +476,14 @@ fun SettingsScreen(
                                 primaryColor = primaryColor
                             )
                         }
+                    }
+                }
+                SettingsCategory.CERTIFICATE_RECOMMENDER -> {
+                    item {
+                        CertificateRecommenderView(
+                            viewModel = viewModel,
+                            primaryColor = primaryColor
+                        )
                     }
                 }
                 else -> {}
@@ -1087,6 +1129,38 @@ fun ProfileSettings(
     }
 }
 
+@Composable
+fun CategorySuggestionChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    primaryColor: Color
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (isSelected) primaryColor.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
+            .border(
+                width = 1.dp,
+                color = if (isSelected) primaryColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+    }
+}
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SkillsSettings(
@@ -1098,6 +1172,16 @@ fun SkillsSettings(
     var newSkillName by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Desenvolvimento") } // "Desenvolvimento" or "Infraestrutura"
 
+    val defaultCategories = remember { listOf("Desenvolvimento", "Infraestrutura", "Banco de Dados", "DevOps", "Design UX/UI") }
+    val suggestedCategories = remember(skills) {
+        val custom = skills.map { it.category }.distinct().filter { it.isNotBlank() }
+        (custom + defaultCategories).distinct()
+    }
+
+    val categoriesList = remember(skills) {
+        skills.map { it.category }.distinct()
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Form to Add Skill
         Text("Adicionar Habilidade:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
@@ -1105,42 +1189,48 @@ fun SkillsSettings(
             value = newSkillName,
             onValueChange = { newSkillName = it },
             label = { Text("Nome da Skill (Ex: Kotlin, AWS)") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("skill_name_input"),
             singleLine = true
         )
         
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Categoria:", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(
-                    selected = selectedCategory == "Desenvolvimento",
-                    onClick = { selectedCategory = "Desenvolvimento" },
-                    colors = RadioButtonDefaults.colors(selectedColor = primaryColor)
-                )
-                Text("Software Dev", fontSize = 13.sp, modifier = Modifier.clickable { selectedCategory = "Desenvolvimento" })
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(
-                    selected = selectedCategory == "Infraestrutura",
-                    onClick = { selectedCategory = "Infraestrutura" },
-                    colors = RadioButtonDefaults.colors(selectedColor = primaryColor)
-                )
-                Text("IT Infra", fontSize = 13.sp, modifier = Modifier.clickable { selectedCategory = "Infraestrutura" })
+        OutlinedTextField(
+            value = selectedCategory,
+            onValueChange = { selectedCategory = it },
+            label = { Text("Categoria da Skill (Ex: Desenvolvimento, Redes, Cloud)") },
+            modifier = Modifier.fillMaxWidth().testTag("skill_category_input"),
+            singleLine = true
+        )
+
+        if (suggestedCategories.isNotEmpty()) {
+            Text(
+                text = "Sugestões de Categorias (clique para selecionar):",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            com.example.ui.home.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                suggestedCategories.forEach { cat ->
+                    CategorySuggestionChip(
+                        text = cat,
+                        isSelected = selectedCategory.trim().equals(cat.trim(), ignoreCase = true),
+                        onClick = { selectedCategory = cat },
+                        primaryColor = primaryColor
+                    )
+                }
             }
         }
 
         Button(
             onClick = {
-                if (newSkillName.isNotBlank()) {
-                    viewModel.addSkill(newSkillName.trim(), selectedCategory)
+                if (newSkillName.isNotBlank() && selectedCategory.isNotBlank()) {
+                    viewModel.addSkill(newSkillName.trim(), selectedCategory.trim())
                     newSkillName = ""
                     Toast.makeText(context, "Skill cadastrada!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Nome da Skill não pode ser vazio", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Nome e categoria da Skill não podem ser vazios", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -1162,13 +1252,16 @@ fun SkillsSettings(
             modifier = Modifier.fillMaxWidth()
         ) {
             skills.forEach { skill ->
+                val catIndex = categoriesList.indexOf(skill.category)
+                val badgeColor = when (catIndex % 3) {
+                    0 -> primaryColor
+                    1 -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.tertiary
+                }
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (skill.category == "Desenvolvimento") primaryColor.copy(alpha = 0.1f)
-                            else MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
-                        )
+                        .background(badgeColor.copy(alpha = 0.1f))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Row(
@@ -1176,10 +1269,10 @@ fun SkillsSettings(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = skill.name,
+                            text = "${skill.name} (${skill.category})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (skill.category == "Desenvolvimento") primaryColor else MaterialTheme.colorScheme.secondary
+                            color = badgeColor
                         )
                         Icon(
                             imageVector = Icons.Default.Cancel,
@@ -2745,4 +2838,578 @@ fun AppUpdateSettings(
         }
     }
 }
+
+@Composable
+fun CertificatesSettings(
+    certificates: List<CertificateEntity>,
+    viewModel: PortfolioViewModel,
+    primaryColor: Color
+) {
+    val context = LocalContext.current
+
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var attachmentPath by remember { mutableStateOf<String?>(null) }
+
+    val attachmentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val base64Str = ImageUtils.uriToBase64(context, uri, maxDimension = 400)
+            if (base64Str != null) {
+                attachmentPath = base64Str
+                Toast.makeText(context, "Anexo do certificado carregado com sucesso!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Erro ao processar imagem do certificado.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Form to add Certificate
+        Text("Cadastrar Novo Certificado:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Título (Ex: AWS Solutions Architect)") },
+            modifier = Modifier.fillMaxWidth().testTag("cert_title_input"),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Data de Conclusão (Ex: Outubro de 2023)") },
+            modifier = Modifier.fillMaxWidth().testTag("cert_date_input"),
+            singleLine = true
+        )
+
+        // Certificate Attachment Picker Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = { attachmentLauncher.launch("image/*") },
+                modifier = Modifier.weight(1f).testTag("cert_attachment_button")
+            ) {
+                Icon(Icons.Default.Image, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(if (attachmentPath != null) "Alterar Anexo" else "Escolher Imagem do Certificado")
+            }
+
+            if (attachmentPath != null) {
+                // Show thumbnail of attachment in settings form
+                Card(
+                    modifier = Modifier.size(56.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                ) {
+                    AsyncImage(
+                        model = attachmentPath,
+                        contentDescription = "Miniatura do anexo carregado",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+            }
+        }
+
+        Button(
+            onClick = {
+                if (title.isNotBlank() && date.isNotBlank()) {
+                    viewModel.addCertificate(
+                        title = title.trim(),
+                        date = date.trim(),
+                        attachmentPath = attachmentPath
+                    )
+                    title = ""
+                    date = ""
+                    attachmentPath = null
+                    Toast.makeText(context, "Certificado cadastrado com sucesso!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Preencha o título e a data de conclusão!", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("add_certificate_button"),
+            colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Adicionar Certificado")
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Certificate List to manage
+        Text("Certificados Cadastrados (${certificates.size}):", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+
+        certificates.forEach { cert ->
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("cert_item_card_${cert.id}"),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Small attachment thumbnail
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(primaryColor.copy(alpha = 0.08f))
+                                .border(1.dp, primaryColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                        ) {
+                            if (!cert.attachmentPath.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = cert.attachmentPath,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.WorkspacePremium,
+                                        contentDescription = null,
+                                        tint = primaryColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Column {
+                            Text(text = cert.title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(text = cert.date, fontSize = 12.sp, color = primaryColor)
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.removeCertificate(cert.id) },
+                        modifier = Modifier.testTag("delete_cert_button_${cert.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Remover certificado",
+                            tint = Color.Red.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CertificateRecommenderView(
+    viewModel: PortfolioViewModel,
+    primaryColor: Color
+) {
+    val state by viewModel.certificateRecommendationsState.collectAsState()
+    val profile by viewModel.profile.collectAsState()
+    val skills by viewModel.skills.collectAsState()
+    val experiences by viewModel.experiences.collectAsState()
+    
+    // Track which recommendations have been added as achievements to provide dynamic feedback
+    var addedCertificates by remember { mutableStateOf(setOf<String>()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Back Button row and title
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(primaryColor.copy(alpha = 0.1f))
+                    .clickable { viewModel.resetCertificateRecommendationsState() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.School,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "Sugestão de Cursos & Certificações",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+        when (state) {
+            is CertificateRecommendationsUiState.Idle -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(primaryColor.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = primaryColor,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "Análise Curricular por IA",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Nossa tecnologia analisará as habilidades técnicas e experiências profissionais salvas no seu currículo local para mapear e recomendar as certificações mais valorizadas pelo mercado de trabalho de TI que darão o maior retorno para sua carreira.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = { viewModel.generateCertificateRecommendations() },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("analyze_resume_button"),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Mapear Certificados Relevantes",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+
+            is CertificateRecommendationsUiState.Loading -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = primaryColor,
+                            modifier = Modifier.size(48.dp)
+                        )
+
+                        Text(
+                            text = "Analisando Competências...",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Avaliando perfil profissional, mapeando lacunas técnicas e cruzando dados de mercado para estruturar suas recomendações de certificação.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
+
+            is CertificateRecommendationsUiState.Success -> {
+                val recommendations = (state as CertificateRecommendationsUiState.Success).recommendations
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Encontramos ${recommendations.size} Recomendações",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    TextButton(
+                        onClick = { viewModel.generateCertificateRecommendations() },
+                        colors = ButtonDefaults.textButtonColors(contentColor = primaryColor)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Refazer Análise", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (recommendations.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Nenhuma recomendação específica pôde ser traçada. Tente adicionar mais habilidades ao seu currículo na seção 'Dados & Perfil'.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    recommendations.forEach { recommendation ->
+                        val isAdded = addedCertificates.contains(recommendation.title)
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Title and Career Field tag
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = recommendation.title,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        
+                                        // Career Field Tag
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(primaryColor.copy(alpha = 0.08f))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = recommendation.careerField,
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = primaryColor
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Course/Certification utility description
+                                Text(
+                                    text = recommendation.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 20.sp
+                                )
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
+
+                                // Metadata metrics (Time and Cost) + CTA action
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        // Duration
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Schedule,
+                                                contentDescription = "Duração",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Duração: ${recommendation.estimatedTime}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        // Cost
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Payments,
+                                                contentDescription = "Custo",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Investimento: ${recommendation.estimatedCost}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    // CTA Button
+                                    Button(
+                                        onClick = {
+                                            if (!isAdded) {
+                                                viewModel.addCertificate(
+                                                    title = recommendation.title,
+                                                    date = "Planejado (Duração: ${recommendation.estimatedTime})"
+                                                )
+                                                addedCertificates = addedCertificates + recommendation.title
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isAdded) MaterialTheme.colorScheme.surfaceVariant else primaryColor,
+                                            contentColor = if (isAdded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isAdded) Icons.Default.CheckCircle else Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isAdded) "Adicionado" else "Focar Objetivo",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            is CertificateRecommendationsUiState.Error -> {
+                val errorMsg = (state as CertificateRecommendationsUiState.Error).error
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = "Erro",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "Erro ao gerar recomendações",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = errorMsg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Button(
+                            onClick = { viewModel.generateCertificateRecommendations() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(text = "Tentar Novamente", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 

@@ -6,9 +6,12 @@ import com.example.data.local.entities.*
 import com.example.data.remote.*
 import com.example.data.remote.models.GithubRepo
 import com.example.data.remote.models.ResumeImprovements
+import com.example.data.remote.models.CourseRecommendation
+import com.example.data.remote.models.CourseRecommendationsResponse
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 class PortfolioRepository(
     private val portfolioDao: PortfolioDao,
@@ -87,6 +90,106 @@ class PortfolioRepository(
 
     suspend fun saveSectionOrder(order: SectionOrderEntity) {
         portfolioDao.saveSectionOrder(order)
+    }
+
+    // Certificates
+    fun getCertificates(): Flow<List<CertificateEntity>> {
+        return portfolioDao.getCertificates()
+    }
+
+    suspend fun insertCertificate(certificate: CertificateEntity) {
+        portfolioDao.insertCertificate(certificate)
+    }
+
+    suspend fun deleteCertificate(id: Int) {
+        portfolioDao.deleteCertificateById(id)
+    }
+
+    suspend fun clearAllCertificates() {
+        portfolioDao.clearAllCertificates()
+    }
+
+    suspend fun checkAndPopulateIfEmpty() {
+        try {
+            val sections = portfolioDao.getSectionOrders().first()
+            if (sections.isEmpty()) {
+                // Preload Theme Settings
+                portfolioDao.saveThemeSettings(ThemeSettingsEntity())
+
+                // Preload Profile
+                portfolioDao.saveProfile(ProfileEntity())
+
+                // Preload Skills
+                val defaultSkills = listOf(
+                    SkillEntity(name = "Kotlin", category = "Desenvolvimento"),
+                    SkillEntity(name = "Jetpack Compose", category = "Desenvolvimento"),
+                    SkillEntity(name = "React", category = "Desenvolvimento"),
+                    SkillEntity(name = "Node.js", category = "Desenvolvimento"),
+                    SkillEntity(name = "Python", category = "Desenvolvimento"),
+                    SkillEntity(name = "TypeScript", category = "Desenvolvimento"),
+                    SkillEntity(name = "Fortinet", category = "Infraestrutura"),
+                    SkillEntity(name = "Zabbix", category = "Infraestrutura"),
+                    SkillEntity(name = "MikroTik", category = "Infraestrutura"),
+                    SkillEntity(name = "Cisco Routing & Switching", category = "Infraestrutura"),
+                    SkillEntity(name = "Docker & Kubernetes", category = "Infraestrutura"),
+                    SkillEntity(name = "AWS Cloud", category = "Infraestrutura")
+                )
+                portfolioDao.insertSkills(defaultSkills)
+
+                // Preload Experience Timeline
+                val defaultExperiences = listOf(
+                    ExperienceEntity(
+                        company = "TechVanguard Solutions",
+                        role = "Arquiteto Android Sênior & Engenheiro Cloud",
+                        period = "2023 - Presente",
+                        description = "Liderança técnica no desenvolvimento de aplicativos móveis escaláveis usando Jetpack Compose e Kotlin Multiplatform. Configuração e sustentação de ambientes AWS integrados a firewalls de segurança Fortinet FortiGate, monitoramento avançado com Zabbix.",
+                        displayOrder = 1
+                    ),
+                    ExperienceEntity(
+                        company = "CyberShield Corp",
+                        role = "Desenvolvedor Full-Stack & Administrador de Redes",
+                        period = "2020 - 2023",
+                        description = "Criação de microsserviços seguros com Node.js/Python e interfaces ricas em React. Gestão de rede de alta disponibilidade corporativa com switches Cisco empilhados, roteadores MikroTik CCR e VPNs IPSec seguras.",
+                        displayOrder = 2
+                    ),
+                    ExperienceEntity(
+                        company = "Global Network Solutions",
+                        role = "Analista de Suporte de Infraestrutura de TI & NOC",
+                        period = "2018 - 2020",
+                        description = "Monitoramento proativo em tempo real de servidores on-premise e cloud usando Zabbix, Prometheus e Grafana. Virtualização e gerenciamento de storage de dados via VMware ESXi, suporte técnico avançado L3.",
+                        displayOrder = 3
+                    )
+                )
+                portfolioDao.insertExperiences(defaultExperiences)
+
+                // Preload Section Orders
+                val defaultSections = listOf(
+                    SectionOrderEntity("sobre", 1, "Sobre Mim"),
+                    SectionOrderEntity("skills", 2, "Habilidades Técnicas"),
+                    SectionOrderEntity("experiencia", 3, "Experiência Profissional"),
+                    SectionOrderEntity("certificados", 4, "Certificados & Conquistas"),
+                    SectionOrderEntity("projetos", 5, "Projetos GitHub"),
+                    SectionOrderEntity("contato", 6, "Contato")
+                )
+                portfolioDao.insertSectionOrders(defaultSections)
+
+                // Preload Default Certificates
+                portfolioDao.insertCertificate(
+                    CertificateEntity(
+                        title = "Certificação Fortinet NSE 4 - Network Security Professional",
+                        date = "Março de 2025"
+                    )
+                )
+                portfolioDao.insertCertificate(
+                    CertificateEntity(
+                        title = "AWS Certified Solutions Architect - Associate",
+                        date = "Janeiro de 2025"
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // GitHub Integration
@@ -255,4 +358,190 @@ class PortfolioRepository(
         val adapter = moshi.adapter(ResumeImprovements::class.java)
         return adapter.fromJson(jsonText)
     }
+
+    suspend fun suggestCertificates(
+        profile: ProfileEntity,
+        skills: List<SkillEntity>,
+        experiences: List<ExperienceEntity>
+    ): List<CourseRecommendation> {
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            return getLocalCourseRecommendations(profile, skills, experiences)
+        }
+
+        val prompt = """
+            Você é um especialista em desenvolvimento de carreira de TI e arquiteto de soluções educacionais.
+            Sua tarefa é analisar o perfil do usuário, suas habilidades e suas experiências de trabalho, e recomendar de 3 a 5 cursos ou certificados técnicos altamente valiosos que impulsionariam a sua carreira atual ou ajudariam a preencher lacunas de habilidades.
+
+            Aqui estão os dados atuais do usuário:
+            1. Cargo/Bio: ${profile.role ?: "N/A"} - ${profile.bio ?: "N/A"}
+            2. Habilidades: ${skills.joinToString(", ") { "${it.name} (${it.category})" }}
+            3. Experiência Profissional:
+               ${experiences.joinToString("\n") { "- ${it.role} na ${it.company}: ${it.description}" }}
+
+            Para cada recomendação, forneça de forma muito realista e precisa:
+            - Nome do curso/certificado (Ex: "Certificação Fortinet NSE 4 - Network Security Professional" ou "Google Associate Android Developer")
+            - Tempo estimado para conclusão (Ex: "40 horas" ou "3 meses")
+            - Custo estimado (Ex: "Grátis", "R$ 400" ou "US$ 150")
+            - Uma breve descrição da serventia do curso/certificado para o mercado de trabalho e o que ele agrega.
+            - Área de atuação principal (Ex: "Segurança de Redes", "Desenvolvimento Mobile", "DevOps")
+
+            Retorne estritamente o seguinte formato JSON, sem marcações markdown ou blocos adicionais (responda APENAS o JSON puro):
+            {
+              "recommendations": [
+                {
+                  "title": "Nome do curso/certificado",
+                  "estimatedTime": "Tempo estimado",
+                  "estimatedCost": "Custo estimado",
+                  "description": "Breve descrição sobre a serventia do curso e o que ele agrega",
+                  "careerField": "Área de atuação"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val request = GeminiContentRequest(
+            contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = prompt)))),
+            generationConfig = GeminiGenerationConfig(
+                responseMimeType = "application/json",
+                temperature = 0.4f
+            )
+        )
+
+        return try {
+            val response = geminiApiService.generateContent(apiKey, request)
+            val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                ?: return getLocalCourseRecommendations(profile, skills, experiences)
+
+            val moshi = Moshi.Builder()
+                .addLast(KotlinJsonAdapterFactory())
+                .build()
+            val adapter = moshi.adapter(CourseRecommendationsResponse::class.java)
+            adapter.fromJson(jsonText)?.recommendations ?: getLocalCourseRecommendations(profile, skills, experiences)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            getLocalCourseRecommendations(profile, skills, experiences)
+        }
+    }
+
+    fun getLocalCourseRecommendations(
+        profile: ProfileEntity,
+        skills: List<SkillEntity>,
+        experiences: List<ExperienceEntity>
+    ): List<CourseRecommendation> {
+        val list = mutableListOf<CourseRecommendation>()
+        
+        val skillsStr = skills.joinToString(" ") { it.name }.lowercase()
+        val expStr = experiences.joinToString(" ") { "${it.role} ${it.description}" }.lowercase()
+        val bioStr = (profile.role ?: "").lowercase() + " " + (profile.bio ?: "").lowercase()
+        
+        val fullContext = "$skillsStr $expStr $bioStr"
+
+        // Infrastructure / NOC / Cloud check
+        val isInfra = fullContext.contains("infra") || 
+                      fullContext.contains("rede") || 
+                      fullContext.contains("cisco") || 
+                      fullContext.contains("fortinet") || 
+                      fullContext.contains("mikrotik") || 
+                      fullContext.contains("zabbix") || 
+                      fullContext.contains("cloud") || 
+                      fullContext.contains("aws") || 
+                      fullContext.contains("docker") || 
+                      fullContext.contains("kubernetes")
+
+        // Mobile / Android check
+        val isMobile = fullContext.contains("android") || 
+                       fullContext.contains("kotlin") || 
+                       fullContext.contains("compose") || 
+                       fullContext.contains("mobile") || 
+                       fullContext.contains("ios") || 
+                       fullContext.contains("swift")
+
+        // Front-end / Full-stack check
+        val isWeb = fullContext.contains("react") || 
+                    fullContext.contains("node") || 
+                    fullContext.contains("typescript") || 
+                    fullContext.contains("javascript") || 
+                    fullContext.contains("full-stack") || 
+                    fullContext.contains("python")
+
+        if (isInfra) {
+            list.add(
+                CourseRecommendation(
+                    title = "Certificação Fortinet NSE 4 - Network Security Professional",
+                    estimatedTime = "40 horas",
+                    estimatedCost = "US$ 150",
+                    description = "Capacitação avançada em segurança de rede corporativa e administração de firewalls FortiGate de última geração. Altamente valorizado no mercado de infraestrutura de TI corporativa.",
+                    careerField = "Segurança de Redes & Engenharia de Segurança"
+                )
+            )
+            list.add(
+                CourseRecommendation(
+                    title = "AWS Certified Solutions Architect - Associate",
+                    estimatedTime = "80 horas",
+                    estimatedCost = "US$ 150",
+                    description = "Valida o conhecimento técnico em projetar e implantar sistemas seguros, escaláveis e resilientes na infraestrutura em nuvem AWS. Essencial para profissionais de Cloud/DevOps.",
+                    careerField = "Cloud Computing & Engenharia DevOps"
+                )
+            )
+            list.add(
+                CourseRecommendation(
+                    title = "Cisco CCNA (200-301) - Certified Network Associate",
+                    estimatedTime = "3 a 6 meses",
+                    estimatedCost = "US$ 300",
+                    description = "Fundamento indispensável em redes de computadores, cobrindo roteamento, comutação, segurança IP e automação de redes Cisco.",
+                    careerField = "Administração de Redes & Infraestrutura"
+                )
+            )
+        }
+
+        if (isMobile) {
+            list.add(
+                CourseRecommendation(
+                    title = "Google Associate Android Developer Certification",
+                    estimatedTime = "2 a 3 meses",
+                    estimatedCost = "US$ 149",
+                    description = "Exame oficial de certificação do Google que valida a competência no desenvolvimento profissional de aplicativos Android usando Kotlin e arquitetura moderna do Android Jetpack.",
+                    careerField = "Desenvolvimento de Software Mobile (Android)"
+                )
+            )
+        }
+
+        if (isWeb) {
+            list.add(
+                CourseRecommendation(
+                    title = "Desenvolvedor de Software Full-Stack (React & Node.js)",
+                    estimatedTime = "60 horas",
+                    estimatedCost = "Grátis (Recursos Open Source / YouTube)",
+                    description = "Curso intensivo focado em construir microsserviços modernos com Node.js, TypeScript e interfaces interativas e responsivas com React.",
+                    careerField = "Engenharia de Software Web Full-Stack"
+                )
+            )
+        }
+
+        // Add standard premium generic recommendations if we need to reach at least 3-4 recommendations
+        if (list.size < 3) {
+            list.add(
+                CourseRecommendation(
+                    title = "Orquestração de Microsserviços com Docker & Kubernetes",
+                    estimatedTime = "30 horas",
+                    estimatedCost = "R$ 49,90",
+                    description = "Curso abrangente sobre conteinerização de software, gerenciamento de clusters, escalabilidade horizontal e automação de esteiras de CI/CD.",
+                    careerField = "Engenharia de Plataforma & DevOps"
+                )
+            )
+            list.add(
+                CourseRecommendation(
+                    title = "Scrum Product Owner (PSPO I) ou Scrum Master (PSM I)",
+                    estimatedTime = "16 horas",
+                    estimatedCost = "US$ 150",
+                    description = "Certificação profissional ágil da Scrum.org altamente reconhecida mundialmente para certificar a liderança de escopo, desenvolvimento de produtos de software e agilidade.",
+                    careerField = "Gestão de Projetos & Liderança Ágil"
+                )
+            )
+        }
+
+        return list
+    }
 }
+

@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.Badge
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -156,11 +156,11 @@ class MainActivity : ComponentActivity() {
                                 onClick = { selectedTab = 2 },
                                 icon = {
                                     Icon(
-                                        imageVector = if (selectedTab == 2) Icons.Default.Settings else Icons.Outlined.Settings,
-                                        contentDescription = "Ajustes"
+                                        imageVector = if (selectedTab == 2) Icons.Default.Build else Icons.Outlined.Build,
+                                        contentDescription = "Serviços"
                                     )
                                 },
-                                label = { Text("Ajustes") },
+                                label = { Text("Serviços") },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = primaryColor,
                                     selectedTextColor = primaryColor,

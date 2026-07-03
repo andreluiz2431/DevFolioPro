@@ -16,9 +16,10 @@ import kotlinx.coroutines.launch
         ProfileEntity::class,
         SkillEntity::class,
         ExperienceEntity::class,
-        SectionOrderEntity::class
+        SectionOrderEntity::class,
+        CertificateEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -111,10 +112,25 @@ abstract class AppDatabase : RoomDatabase() {
                 SectionOrderEntity("sobre", 1, "Sobre Mim"),
                 SectionOrderEntity("skills", 2, "Habilidades Técnicas"),
                 SectionOrderEntity("experiencia", 3, "Experiência Profissional"),
-                SectionOrderEntity("projetos", 4, "Projetos GitHub"),
-                SectionOrderEntity("contato", 5, "Contato")
+                SectionOrderEntity("certificados", 4, "Certificados & Conquistas"),
+                SectionOrderEntity("projetos", 5, "Projetos GitHub"),
+                SectionOrderEntity("contato", 6, "Contato")
             )
             dao.insertSectionOrders(defaultSections)
+
+            // Preload Default Certificates
+            dao.insertCertificate(
+                CertificateEntity(
+                    title = "Certificação Fortinet NSE 4 - Network Security Professional",
+                    date = "Março de 2025"
+                )
+            )
+            dao.insertCertificate(
+                CertificateEntity(
+                    title = "AWS Certified Solutions Architect - Associate",
+                    date = "Janeiro de 2025"
+                )
+            )
         }
     }
 }

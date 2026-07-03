@@ -45,6 +45,14 @@ data class ExperienceEntity(
     val displayOrder: Int
 )
 
+@Entity(tableName = "certificates")
+data class CertificateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val date: String,
+    val attachmentPath: String? = null
+)
+
 @Entity(tableName = "section_order")
 data class SectionOrderEntity(
     @PrimaryKey val sectionId: String, // "sobre", "skills", "experiencia", "projetos", "contato"

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.local.entities.CertificateEntity
 import com.example.data.local.entities.ExperienceEntity
 import com.example.data.local.entities.ProfileEntity
 import com.example.data.local.entities.SectionOrderEntity
@@ -51,6 +52,7 @@ fun HomeScreen(
     val profile by viewModel.profile.collectAsState()
     val skills by viewModel.skills.collectAsState()
     val experiences by viewModel.experiences.collectAsState()
+    val certificates by viewModel.certificates.collectAsState()
     val sections by viewModel.sectionOrders.collectAsState()
     val githubReposState by viewModel.githubReposState.collectAsState()
     val themeSettings by viewModel.themeSettings.collectAsState()
@@ -91,6 +93,13 @@ fun HomeScreen(
                     item(key = "experiencia") {
                         SectionWrapper(title = section.title, icon = Icons.Default.WorkHistory, primaryColor = primaryColor) {
                             ExperienceTimeline(experiences = experiences, primaryColor = primaryColor)
+                        }
+                    }
+                }
+                "certificados" -> {
+                    item(key = "certificados") {
+                        SectionWrapper(title = section.title, icon = Icons.Default.WorkspacePremium, primaryColor = primaryColor) {
+                            CertificatesSection(certificates = certificates, primaryColor = primaryColor)
                         }
                     }
                 }
@@ -350,47 +359,42 @@ fun SkillsSection(
     primaryColor: Color,
     secondaryColor: Color
 ) {
-    val devSkills = skills.filter { it.category == "Desenvolvimento" }
-    val infraSkills = skills.filter { it.category == "Infraestrutura" }
+    val skillsByCategory = remember(skills) {
+        skills.groupBy { it.category }
+    }
+    val categories = remember(skillsByCategory) {
+        skillsByCategory.keys.toList()
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (devSkills.isNotEmpty()) {
-            Column {
-                Text(
-                    text = "DESENVOLVIMENTO DE SOFTWARE",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = primaryColor
-                    ),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    devSkills.forEach { skill ->
-                        SkillBadge(skillName = skill.name, badgeColor = primaryColor.copy(alpha = 0.12f), textColor = primaryColor)
-                    }
+        skillsByCategory.forEach { (category, categorySkills) ->
+            if (categorySkills.isNotEmpty()) {
+                val catIndex = categories.indexOf(category)
+                val badgeColor = when (catIndex % 3) {
+                    0 -> primaryColor
+                    1 -> secondaryColor
+                    else -> MaterialTheme.colorScheme.tertiary
                 }
-            }
-        }
-
-        if (infraSkills.isNotEmpty()) {
-            Column {
-                Text(
-                    text = "REDES & INFRAESTRUTURA DE TI",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = secondaryColor
-                    ),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    infraSkills.forEach { skill ->
-                        SkillBadge(skillName = skill.name, badgeColor = secondaryColor.copy(alpha = 0.12f), textColor = secondaryColor)
+                Column {
+                    Text(
+                        text = category.uppercase(),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = badgeColor
+                        ),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categorySkills.forEach { skill ->
+                            SkillBadge(
+                                skillName = skill.name,
+                                badgeColor = badgeColor.copy(alpha = 0.12f),
+                                textColor = badgeColor
+                            )
+                        }
                     }
                 }
             }
@@ -810,4 +814,161 @@ fun FlowRow(
         verticalArrangement = verticalArrangement,
         content = content
     )
+}
+
+@Composable
+fun CertificatesSection(
+    certificates: List<CertificateEntity>,
+    primaryColor: Color
+) {
+    var selectedImageForDialog by remember { mutableStateOf<String?>(null) }
+
+    if (certificates.isEmpty()) {
+        Text(
+            text = "Nenhum certificado cadastrado ainda. Vá em 'Dados & Perfil' para cadastrar seus certificados.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        certificates.forEach { cert ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("certificate_card_${cert.id}"),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Miniatura do anexo
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(primaryColor.copy(alpha = 0.08f))
+                            .border(1.dp, primaryColor.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                            .clickable(enabled = !cert.attachmentPath.isNullOrBlank()) {
+                                selectedImageForDialog = cert.attachmentPath
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!cert.attachmentPath.isNullOrBlank()) {
+                            AsyncImage(
+                                model = cert.attachmentPath,
+                                contentDescription = "Miniatura do certificado ${cert.title}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            // Professional Placeholder Gradient
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                primaryColor.copy(alpha = 0.2f),
+                                                primaryColor.copy(alpha = 0.05f)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WorkspacePremium,
+                                    contentDescription = "Certificado sem imagem",
+                                    tint = primaryColor,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Informações do certificado
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = cert.title,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = cert.date,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!cert.attachmentPath.isNullOrBlank()) {
+                            Text(
+                                text = "Clique na miniatura para ampliar",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = primaryColor,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog to view enlarged certificate image
+    selectedImageForDialog?.let { imagePath ->
+        AlertDialog(
+            onDismissRequest = { selectedImageForDialog = null },
+            confirmButton = {
+                TextButton(onClick = { selectedImageForDialog = null }) {
+                    Text("Fechar")
+                }
+            },
+            title = {
+                Text(
+                    text = "Visualização do Certificado",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = imagePath,
+                        contentDescription = "Certificado Ampliado",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                }
+            }
+        )
+    }
 }

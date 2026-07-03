@@ -29,3 +29,18 @@ data class ImprovedExperienceSuggestion(
     val period: String?,
     val improvedDescription: String?
 )
+
+@JsonClass(generateAdapter = true)
+data class CourseRecommendation(
+    val title: String,
+    val estimatedTime: String,
+    val estimatedCost: String,
+    val description: String,
+    val careerField: String
+)
+
+@JsonClass(generateAdapter = true)
+data class CourseRecommendationsResponse(
+    val recommendations: List<CourseRecommendation>?
+)
+

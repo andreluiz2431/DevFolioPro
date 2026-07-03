@@ -8,6 +8,7 @@ import com.example.data.remote.models.GithubRepo
 import com.example.data.remote.models.ResumeImprovements
 import com.example.data.remote.models.RecommendedSkillSuggestion
 import com.example.data.remote.models.ImprovedExperienceSuggestion
+import com.example.data.remote.models.CourseRecommendation
 import com.example.data.repository.PortfolioRepository
 import com.example.data.remote.FirebaseSyncManager
 import com.example.data.remote.UserSession
@@ -48,6 +49,13 @@ sealed interface ResumeCoachUiState {
     object Loading : ResumeCoachUiState
     data class Success(val improvements: ResumeImprovements) : ResumeCoachUiState
     data class Error(val error: String) : ResumeCoachUiState
+}
+
+sealed interface CertificateRecommendationsUiState {
+    object Idle : CertificateRecommendationsUiState
+    object Loading : CertificateRecommendationsUiState
+    data class Success(val recommendations: List<CourseRecommendation>) : CertificateRecommendationsUiState
+    data class Error(val error: String) : CertificateRecommendationsUiState
 }
 
 class PortfolioViewModel(
@@ -124,6 +132,14 @@ class PortfolioViewModel(
             initialValue = emptyList()
         )
 
+    // Certificates
+    val certificates: StateFlow<List<CertificateEntity>> = repository.getCertificates()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // GitHub Repos State
     private val _githubReposState = MutableStateFlow<GithubReposUiState>(GithubReposUiState.Idle)
     val githubReposState: StateFlow<GithubReposUiState> = _githubReposState.asStateFlow()
@@ -139,6 +155,11 @@ class PortfolioViewModel(
     val selectedResumeName: StateFlow<String> = _selectedResumeName.asStateFlow()
 
     init {
+        // Automatically check and populate database if empty (e.g., after destructive migration)
+        viewModelScope.launch {
+            repository.checkAndPopulateIfEmpty()
+        }
+
         // Automatically fetch GitHub repos when the username changes and is not empty
         viewModelScope.launch {
             profile.collect { prof ->
@@ -271,6 +292,25 @@ class PortfolioViewModel(
         }
     }
 
+    // Certificates Operations
+    fun addCertificate(title: String, date: String, attachmentPath: String? = null) {
+        viewModelScope.launch {
+            repository.insertCertificate(
+                CertificateEntity(
+                    title = title,
+                    date = date,
+                    attachmentPath = attachmentPath
+                )
+            )
+        }
+    }
+
+    fun removeCertificate(id: Int) {
+        viewModelScope.launch {
+            repository.deleteCertificate(id)
+        }
+    }
+
     // Experience Operations
     fun addExperience(company: String, role: String, period: String, description: String) {
         viewModelScope.launch {
@@ -357,7 +397,7 @@ class PortfolioViewModel(
                     }
                     imported.skills?.mapNotNull { skill ->
                         if (!skill.name.isNullOrBlank()) {
-                            val cat = if (skill.category == "Infraestrutura") "Infraestrutura" else "Desenvolvimento"
+                            val cat = if (!skill.category.isNullOrBlank()) skill.category else "Desenvolvimento"
                             SkillEntity(name = skill.name, category = cat)
                         } else null
                     }?.let { skillsToInsert ->
@@ -472,6 +512,7 @@ class PortfolioViewModel(
             try {
                 repository.clearAllSkills()
                 repository.clearAllExperiences()
+                repository.clearAllCertificates()
                 repository.saveProfile(
                     ProfileEntity(
                         id = 1,
@@ -511,7 +552,8 @@ class PortfolioViewModel(
                             skills = skills.value,
                             experiences = experiences.value,
                             themeSettings = themeSettings.value,
-                            sectionOrders = sectionOrders.value
+                            sectionOrders = sectionOrders.value,
+                            certificates = certificates.value
                         )
                         firebaseSyncManager.uploadPortfolio(user.uid, user.isSimulated, syncData, resumeId)
                         loadSavedResumes()
@@ -536,7 +578,8 @@ class PortfolioViewModel(
                                 skills = skills.value,
                                 experiences = experiences.value,
                                 themeSettings = themeSettings.value,
-                                sectionOrders = sectionOrders.value
+                                sectionOrders = sectionOrders.value,
+                                certificates = certificates.value
                             )
                             val mergedData = mergeSyncData(local = localData, cloud = cloudData)
                             applySyncData(mergedData)
@@ -551,7 +594,8 @@ class PortfolioViewModel(
                                 skills = skills.value,
                                 experiences = experiences.value,
                                 themeSettings = themeSettings.value,
-                                sectionOrders = sectionOrders.value
+                                sectionOrders = sectionOrders.value,
+                                certificates = certificates.value
                             )
                             firebaseSyncManager.uploadPortfolio(user.uid, user.isSimulated, syncData, resumeId)
                             loadSavedResumes()
@@ -576,6 +620,12 @@ class PortfolioViewModel(
         // Apply experiences (clear first, then insert)
         repository.clearAllExperiences()
         data.experiences?.let { repository.insertExperiences(it) }
+
+        // Apply certificates (clear first, then insert)
+        repository.clearAllCertificates()
+        data.certificates?.let { certs ->
+            certs.forEach { repository.insertCertificate(it) }
+        }
         
         // Apply theme if available
         data.themeSettings?.let { repository.saveThemeSettings(it) }
@@ -606,12 +656,17 @@ class PortfolioViewModel(
         val mergedExperiences = (localExperiences + cloudExperiences).distinctBy { "${it.company.trim().lowercase()}_${it.role.trim().lowercase()}" }
             .mapIndexed { index, exp -> exp.copy(displayOrder = index + 1) }
 
+        val localCerts = local.certificates ?: emptyList()
+        val cloudCerts = cloud.certificates ?: emptyList()
+        val mergedCerts = (localCerts + cloudCerts).distinctBy { it.title.trim().lowercase() }
+
         return PortfolioSyncData(
             profile = mergedProfile,
             skills = mergedSkills,
             experiences = mergedExperiences,
             themeSettings = local.themeSettings ?: cloud.themeSettings,
-            sectionOrders = local.sectionOrders ?: cloud.sectionOrders
+            sectionOrders = local.sectionOrders ?: cloud.sectionOrders,
+            certificates = mergedCerts
         )
     }
 
@@ -663,7 +718,8 @@ class PortfolioViewModel(
 
     fun addRecommendedSkill(name: String, category: String) {
         viewModelScope.launch {
-            val normalizedCat = if (category.trim().equals("Infraestrutura", ignoreCase = true)) "Infraestrutura" else "Desenvolvimento"
+            val trimmedCat = category.trim()
+            val normalizedCat = if (trimmedCat.isBlank()) "Desenvolvimento" else trimmedCat
             // Avoid duplicates
             val exists = skills.value.any { it.name.trim().lowercase() == name.trim().lowercase() }
             if (!exists) {
@@ -689,6 +745,36 @@ class PortfolioViewModel(
                 if (matchCompany != null) {
                     repository.insertExperience(matchCompany.copy(description = improvedDescription))
                 }
+            }
+        }
+    }
+
+    // Certificate Recommendations State & Operation
+    private val _certificateRecommendationsState = MutableStateFlow<CertificateRecommendationsUiState>(CertificateRecommendationsUiState.Idle)
+    val certificateRecommendationsState: StateFlow<CertificateRecommendationsUiState> = _certificateRecommendationsState.asStateFlow()
+
+    fun resetCertificateRecommendationsState() {
+        _certificateRecommendationsState.value = CertificateRecommendationsUiState.Idle
+    }
+
+    fun generateCertificateRecommendations() {
+        viewModelScope.launch {
+            _certificateRecommendationsState.value = CertificateRecommendationsUiState.Loading
+            try {
+                val currentProfile = profile.value
+                val currentSkills = skills.value
+                val currentExperiences = experiences.value
+
+                val recommendations = repository.suggestCertificates(
+                    profile = currentProfile,
+                    skills = currentSkills,
+                    experiences = currentExperiences
+                )
+                _certificateRecommendationsState.value = CertificateRecommendationsUiState.Success(recommendations)
+            } catch (e: Exception) {
+                _certificateRecommendationsState.value = CertificateRecommendationsUiState.Error(
+                    e.localizedMessage ?: "Erro ao gerar recomendações de certificados."
+                )
             }
         }
     }

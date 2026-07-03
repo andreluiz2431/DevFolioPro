@@ -130,11 +130,13 @@ object ExportUtils {
         // Section: Technical Skills
         canvas.drawText("HABILIDADES TÉCNICAS", leftMargin, yPosition, paintHeading)
         yPosition += 16f
-        val devSkillsStr = "Desenvolvimento de Software: " + skills.filter { it.category == "Desenvolvimento" }.joinToString(", ") { it.name }
-        val infraSkillsStr = "Infraestrutura de TI & Redes: " + skills.filter { it.category == "Infraestrutura" }.joinToString(", ") { it.name }
-
-        yPosition = drawParagraph(devSkillsStr, yPosition, paintNormal)
-        yPosition = drawParagraph(infraSkillsStr, yPosition, paintNormal)
+        val skillsByCategory = skills.groupBy { it.category }
+        skillsByCategory.forEach { (category, skillList) ->
+            if (skillList.isNotEmpty()) {
+                val categoryStr = "$category: " + skillList.joinToString(", ") { it.name }
+                yPosition = drawParagraph(categoryStr, yPosition, paintNormal)
+            }
+        }
         yPosition += 15f
 
         // Section: Professional Experience
@@ -197,32 +199,20 @@ object ExportUtils {
         val bgColor = themeSettings.backgroundColorHex
         val textColor = themeSettings.textColorHex
 
-        val devSkillsList = skills.filter { it.category == "Desenvolvimento" }
-        val infraSkillsList = skills.filter { it.category == "Infraestrutura" }
-
+        val skillsByCategory = skills.groupBy { it.category }
         val skillsHtml = StringBuilder()
-        if (devSkillsList.isNotEmpty()) {
-            skillsHtml.append("""
-                <div class="mb-6">
-                    <h3 class="text-xs font-bold uppercase tracking-wider mb-3" style="color: $primaryColor">Desenvolvimento de Software</h3>
-                    <div class="flex flex-wrap gap-2">
-            """.trimIndent())
-            devSkillsList.forEach {
-                skillsHtml.append("<span class=\"px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg text-sm font-medium text-gray-800\">${it.name}</span>")
+        skillsByCategory.forEach { (category, skillList) ->
+            if (skillList.isNotEmpty()) {
+                skillsHtml.append("""
+                    <div class="mb-4">
+                        <h3 class="text-xs font-bold uppercase tracking-wider mb-3" style="color: $primaryColor">${category}</h3>
+                        <div class="flex flex-wrap gap-2">
+                """.trimIndent())
+                skillList.forEach {
+                    skillsHtml.append("<span class=\"px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg text-sm font-medium text-gray-800\">${it.name}</span>")
+                }
+                skillsHtml.append("</div></div>")
             }
-            skillsHtml.append("</div></div>")
-        }
-
-        if (infraSkillsList.isNotEmpty()) {
-            skillsHtml.append("""
-                <div class="mb-4">
-                    <h3 class="text-xs font-bold uppercase tracking-wider mb-3" style="color: $secondaryColor">Redes & Infraestrutura de TI</h3>
-                    <div class="flex flex-wrap gap-2">
-            """.trimIndent())
-            infraSkillsList.forEach {
-                skillsHtml.append("<span class=\"px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg text-sm font-medium text-gray-800\">${it.name}</span>")
-            }
-            skillsHtml.append("</div></div>")
         }
 
         val experienceHtml = StringBuilder()

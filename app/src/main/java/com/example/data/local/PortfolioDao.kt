@@ -65,4 +65,17 @@ interface PortfolioDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSectionOrder(order: SectionOrderEntity)
+
+    // Certificates
+    @Query("SELECT * FROM certificates ORDER BY id DESC")
+    fun getCertificates(): Flow<List<CertificateEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCertificate(certificate: CertificateEntity)
+
+    @Query("DELETE FROM certificates WHERE id = :id")
+    suspend fun deleteCertificateById(id: Int)
+
+    @Query("DELETE FROM certificates")
+    suspend fun clearAllCertificates()
 }
