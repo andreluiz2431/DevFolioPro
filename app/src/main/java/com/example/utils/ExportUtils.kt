@@ -328,7 +328,11 @@ object ExportUtils {
                 }
             }
 
-            val uri: Uri? = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            } else {
+                contentResolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+            }
             if (uri != null) {
                 val outputStream: OutputStream? = contentResolver.openOutputStream(uri)
                 if (outputStream != null) {
@@ -362,7 +366,11 @@ object ExportUtils {
                 }
             }
 
-            val uri: Uri? = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            } else {
+                contentResolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+            }
             if (uri != null) {
                 val outputStream: OutputStream? = contentResolver.openOutputStream(uri)
                 if (outputStream != null) {
