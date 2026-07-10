@@ -79,7 +79,7 @@ data class ImportedExperience(
 
 interface GeminiApiService {
 
-    @POST("v1beta/models/gemini-3.5-flash:generateContent")
+    @POST("v1beta/models/gemini-3.1-flash-lite-preview:generateContent")
     suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body request: GeminiContentRequest
