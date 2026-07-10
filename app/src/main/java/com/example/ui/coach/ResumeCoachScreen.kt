@@ -74,6 +74,156 @@ fun ResumeCoachScreen(
         }
     }
 
+    val isUnlocked by viewModel.isCoursesFeatureUnlockedState.collectAsState()
+    val testUsageCount by viewModel.testUsageCountState.collectAsState()
+    val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
+
+    val checkoutUrl by viewModel.mercadoPagoCheckoutUrl.collectAsState()
+    if (checkoutUrl != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.resetMercadoPagoCheckout() },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            ),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            content = {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.background,
+                    tonalElevation = 8.dp
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Title bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = primaryColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Checkout Seguro Mercado Pago",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            
+                            IconButton(onClick = { viewModel.resetMercadoPagoCheckout() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Fechar checkout"
+                                )
+                            }
+                        }
+                        
+                        HorizontalDivider()
+                        
+                        // WebView loading the checkout
+                        Box(modifier = Modifier.weight(1f)) {
+                            androidx.compose.ui.viewinterop.AndroidView(
+                                factory = { ctx ->
+                                    android.webkit.WebView(ctx).apply {
+                                        settings.apply {
+                                            javaScriptEnabled = true
+                                            domStorageEnabled = true
+                                            databaseEnabled = true
+                                            loadWithOverviewMode = true
+                                            useWideViewPort = true
+                                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                            javaScriptCanOpenWindowsAutomatically = true
+                                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                                        }
+                                        
+                                        val cookieManager = android.webkit.CookieManager.getInstance()
+                                        cookieManager.setAcceptCookie(true)
+                                        cookieManager.setAcceptThirdPartyCookies(this, true)
+                                        
+                                        webChromeClient = object : android.webkit.WebChromeClient() {
+                                            override fun onReceivedTitle(view: android.webkit.WebView?, title: String?) {
+                                                super.onReceivedTitle(view, title)
+                                                val lowerTitle = title?.lowercase() ?: ""
+                                                val hasSuccessWord = lowerTitle.contains("sucesso") || 
+                                                                     lowerTitle.contains("aprovado") || 
+                                                                     lowerTitle.contains("pago com sucesso") || 
+                                                                     lowerTitle.contains("pagamento aprovado") || 
+                                                                     lowerTitle.contains("success") || 
+                                                                     lowerTitle.contains("approved") || 
+                                                                     lowerTitle.contains("congrats") || 
+                                                                     lowerTitle.contains("concluído") || 
+                                                                     lowerTitle.contains("concluido") || 
+                                                                     lowerTitle.contains("parabéns") || 
+                                                                     lowerTitle.contains("parabens") || 
+                                                                     lowerTitle.contains("obrigado")
+                                                
+                                                val hasNegativeWord = lowerTitle.contains("falha") || 
+                                                                      lowerTitle.contains("falhou") || 
+                                                                      lowerTitle.contains("erro") || 
+                                                                      lowerTitle.contains("negado") || 
+                                                                      lowerTitle.contains("recusado")
+                                                
+                                                if (hasSuccessWord && !hasNegativeWord) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                }
+                                            }
+                                        }
+                                        
+                                        webViewClient = object : android.webkit.WebViewClient() {
+                                            private fun checkPaymentSuccess(url: String?): Boolean {
+                                                val lowerUrl = url?.lowercase() ?: ""
+                                                return lowerUrl.contains("success") || 
+                                                       lowerUrl.contains("approved") || 
+                                                       lowerUrl.contains("pending") || 
+                                                       lowerUrl.contains("congrats") || 
+                                                       lowerUrl.contains("feedback") || 
+                                                       lowerUrl.contains("complete") || 
+                                                       lowerUrl.contains("concluido") || 
+                                                       lowerUrl.contains("sucesso") || 
+                                                       lowerUrl.contains("aprovado") || 
+                                                       lowerUrl.contains("status=approved") || 
+                                                       lowerUrl.contains("status=pending") || 
+                                                       lowerUrl.contains("payment-success")
+                                            }
+
+                                            override fun shouldOverrideUrlLoading(view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                                                val urlString = request?.url?.toString() ?: ""
+                                                if (checkPaymentSuccess(urlString)) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                    return true
+                                                }
+                                                return false
+                                            }
+                                        }
+                                        loadUrl(checkoutUrl ?: "")
+                                    }
+                                },
+                                update = { webView ->
+                                    // Update url if changed
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -103,7 +253,162 @@ fun ResumeCoachScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (val state = coachState) {
+            if (currentUser == null) {
+                // Not logged in lock screen
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(primaryColor.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Acesso Bloqueado: Conecte-se",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Para desbloquear o AI Resume Coach e analisar seu currículo utilizando inteligência artificial, você precisa primeiro entrar na sua conta.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Por favor, faça login ou cadastre-se na aba Serviços (Perfil / Sincronizar Nuvem).",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = primaryColor,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else if (!isUnlocked && testUsageCount >= 2) {
+                // Not premium lock screen (Free trial expired)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                        .background(MaterialTheme.colorScheme.surface),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(primaryColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.WorkspacePremium,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Fase de Teste Expirada",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "2 DE 2 TESTES REALIZADOS",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Você já utilizou os seus 2 testes de melhoria de currículo. Adquira a licença premium agora para ter acesso ilimitado ao AI Resume Coach e continuar aprimorando seu perfil!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Feedbacks inteligentes sobre cada seção do currículo", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Aprimoramento focado em vagas de TI desejadas", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sincronizado com a mesma licença de cursos premium", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Text(
+                        text = "Desbloqueie este recurso agora por apenas R$ 19,90",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Button(
+                        onClick = {
+                            viewModel.startMercadoPagoCheckout(currentUser?.email ?: "")
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.ShoppingCart, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Adquirir Licença Premium")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Se preferir, gerencie suas licenças na aba Serviços.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                when (val state = coachState) {
                 is ResumeCoachUiState.Idle -> {
                     // Let the user select target role first
                     LazyColumn(
@@ -113,6 +418,56 @@ fun ResumeCoachScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
+                        if (!isUnlocked) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                                    ),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(primaryColor.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = "Fase de testes",
+                                                tint = primaryColor,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            val remaining = (2 - testUsageCount).coerceAtLeast(0)
+                                            Text(
+                                                text = "Fase de Teste Ativa",
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "Você possui $remaining de 2 testes restantes nesta conta.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         item {
                             Card(
                                 colors = CardDefaults.cardColors(
@@ -343,6 +698,56 @@ fun ResumeCoachScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
+                        if (!isUnlocked) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                                    ),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(primaryColor.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = "Fase de testes",
+                                                tint = primaryColor,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            val remaining = (2 - testUsageCount).coerceAtLeast(0)
+                                            Text(
+                                                text = "Fase de Teste Ativa",
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "Você possui $remaining de 2 testes restantes nesta conta.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         item {
                             // Header showing the target vacancy analyzed
                             Card(
@@ -791,6 +1196,7 @@ fun ResumeCoachScreen(
             }
         }
     }
+}
 }
 
 @Composable

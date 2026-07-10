@@ -314,46 +314,7 @@ fun ProfileDialog(
                             Text("Entrar com Google (Firebase)", fontWeight = FontWeight.Bold)
                         }
 
-                        OutlinedButton(
-                            onClick = onSimulatedSignInClick,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("simulated_login_dialog_button"),
-                            border = BorderStroke(1.dp, primaryColor),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = syncState !is FirebaseSyncUiState.Loading
-                        ) {
-                            Icon(imageVector = Icons.Default.SmartToy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Entrar com Conta de Teste (Simulado)", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = primaryColor
-                            )
-                            Text(
-                                text = "O modo simulado permite salvar backups e portfólios virtualmente, ideal para testar imediatamente no navegador!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        // Simulated login and legend are hidden as requested
                     }
                 }
             }

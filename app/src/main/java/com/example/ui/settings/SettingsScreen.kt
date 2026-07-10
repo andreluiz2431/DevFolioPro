@@ -217,19 +217,19 @@ fun SettingsScreen(
                             }
                             
                             // Manual fallback text button to unlock features if needed
-                            TextButton(
-                                onClick = {
-                                    viewModel.unlockCoursesFeature()
-                                    viewModel.resetMercadoPagoCheckout()
-                                },
-                                modifier = Modifier.padding(end = 4.dp)
-                            ) {
-                                Text(
-                                    text = "Liberar",
-                                    color = primaryColor,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                            }
+                            // TextButton(
+                            //     onClick = {
+                            //         viewModel.unlockCoursesFeature()
+                            //         viewModel.resetMercadoPagoCheckout()
+                            //     },
+                            //     modifier = Modifier.padding(end = 4.dp)
+                            // ) {
+                            //     Text(
+                            //         text = "Liberar",
+                            //         color = primaryColor,
+                            //         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            //     )
+                            // }
                             
                             IconButton(onClick = { viewModel.resetMercadoPagoCheckout() }) {
                                 Icon(
@@ -2464,44 +2464,7 @@ fun CloudSyncSettings(
                     Text("Entrar com Google (Firebase)", fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedButton(
-                    onClick = { showSimulatedLogin = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("simulated_login_button"),
-                    border = BorderStroke(1.dp, primaryColor),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = syncState !is FirebaseSyncUiState.Loading
-                ) {
-                    Icon(imageVector = Icons.Default.SmartToy, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Entrar com Conta de Teste (Simulado)", fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = primaryColor
-                    )
-                    Text(
-                        text = "O modo simulado permite experimentar a experiência de nuvem salvando seus backups de forma virtual, ideal para rodar no emulador imediatamente!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                // Simulated login and its legend are hidden as requested
             }
         }
 

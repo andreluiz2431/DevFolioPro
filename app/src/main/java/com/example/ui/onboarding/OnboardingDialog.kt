@@ -297,24 +297,7 @@ fun OnboardingDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Entrar com Google (Seguro)", fontWeight = FontWeight.Bold)
                     }
-
-                    OutlinedButton(
-                        onClick = {
-                            markAsShown()
-                            onSimulatedSignInClick()
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.5f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("onboarding_simulated_signin_button")
-                    ) {
-                        Icon(imageVector = Icons.Default.SmartToy, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Usar Conta de Teste (Modo Simulado)", fontWeight = FontWeight.SemiBold)
-                    }
+                    // Simulated login is hidden as requested
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

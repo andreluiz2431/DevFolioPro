@@ -17,7 +17,8 @@ data class PaymentResult(
     val id: Long?,
     val status: String?,
     val external_reference: String?,
-    val status_detail: String?
+    val status_detail: String?,
+    val date_approved: String? = null
 )
 
 @JsonClass(generateAdapter = true)

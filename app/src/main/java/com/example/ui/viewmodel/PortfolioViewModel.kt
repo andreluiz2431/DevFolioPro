@@ -158,6 +158,10 @@ class PortfolioViewModel(
     private val _isCoursesFeatureUnlockedState = MutableStateFlow(false)
     val isCoursesFeatureUnlockedState: StateFlow<Boolean> = _isCoursesFeatureUnlockedState.asStateFlow()
 
+    // Test phase usage count state
+    private val _testUsageCountState = MutableStateFlow(0)
+    val testUsageCountState: StateFlow<Int> = _testUsageCountState.asStateFlow()
+
     // Mercado Pago Checkout States
     private val _mercadoPagoCheckoutUrl = MutableStateFlow<String?>(null)
     val mercadoPagoCheckoutUrl: StateFlow<String?> = _mercadoPagoCheckoutUrl.asStateFlow()
@@ -191,13 +195,13 @@ class PortfolioViewModel(
             firebaseSyncManager.currentUser.collect { user ->
                 if (user != null) {
                     loadSavedResumes()
-                    _isCoursesFeatureUnlockedState.value = firebaseSyncManager.isCoursesFeatureUnlocked(user.uid)
-                    checkLicenseStatusFromRailway()
-                    checkMercadoPagoPaymentStatusDirectly()
+                    checkLicenseStatus()
+                    loadTestUsageCount()
                 } else {
                     _savedResumes.value = listOf("Principal")
                     _selectedResumeName.value = "Principal"
                     _isCoursesFeatureUnlockedState.value = false
+                    _testUsageCountState.value = 0
                 }
             }
         }
@@ -507,7 +511,7 @@ class PortfolioViewModel(
             try {
                 val session = firebaseSyncManager.signInSimulated(email, name)
                 _syncState.value = FirebaseSyncUiState.Success("Logado no modo simulado como ${session.displayName}!")
-                loadSavedResumes()
+                loadAndSyncFirstResumeOnLogin()
             } catch (e: Exception) {
                 _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro ao fazer login simulado.")
             }
@@ -520,7 +524,7 @@ class PortfolioViewModel(
             try {
                 val session = firebaseSyncManager.signInWithGoogleIdToken(idToken)
                 _syncState.value = FirebaseSyncUiState.Success("Autenticado via Google como ${session.displayName}!")
-                loadSavedResumes()
+                loadAndSyncFirstResumeOnLogin()
             } catch (e: Exception) {
                 _syncState.value = FirebaseSyncUiState.Error(e.localizedMessage ?: "Erro ao autenticar com Firebase.")
             }
@@ -720,6 +724,9 @@ class PortfolioViewModel(
                 )
                 if (results != null) {
                     _resumeCoachState.value = ResumeCoachUiState.Success(results)
+                    if (!_isCoursesFeatureUnlockedState.value) {
+                        incrementTestUsageCount()
+                    }
                 } else {
                     _resumeCoachState.value = ResumeCoachUiState.Error("Não foi possível gerar sugestões do servidor de IA.")
                 }
@@ -807,12 +814,134 @@ class PortfolioViewModel(
         _mercadoPagoLoading.value = false
     }
 
-    fun unlockCoursesFeature() {
+    fun unlockCoursesFeature(acquisitionDate: Long = System.currentTimeMillis()) {
         val user = firebaseSyncManager.currentUser.value
         if (user != null) {
-            firebaseSyncManager.setCoursesFeatureUnlocked(user.uid, true)
+            viewModelScope.launch {
+                firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, true, acquisitionDate)
+            }
         }
         _isCoursesFeatureUnlockedState.value = true
+    }
+
+    fun loadAndSyncFirstResumeOnLogin() {
+        val user = firebaseSyncManager.currentUser.value ?: return
+        viewModelScope.launch {
+            try {
+                val list = firebaseSyncManager.listSavedResumes(user.uid, user.isSimulated)
+                _savedResumes.value = list
+                val firstResume = list.firstOrNull() ?: "Principal"
+                _selectedResumeName.value = firstResume
+                
+                // Automatically download and apply the data of the first resume
+                val cloudData = firebaseSyncManager.downloadPortfolio(user.uid, user.isSimulated, firstResume)
+                if (cloudData != null) {
+                    applySyncData(cloudData)
+                    android.util.Log.d("PortfolioViewModel", "Primeiro currículo '$firstResume' carregado e sincronizado automaticamente no login.")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PortfolioViewModel", "Erro ao carregar/sincronizar primeiro currículo no login: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun checkLicenseStatus() {
+        val user = firebaseSyncManager.currentUser.value ?: return
+        viewModelScope.launch {
+            try {
+                // 1. Download current license status from Firebase (Firestore / SharedPreferences)
+                val licenseInfo = firebaseSyncManager.downloadLicenseStatus(user.uid, user.isSimulated)
+                val isUnlockedLocal = licenseInfo.first
+                val acquisitionDate = licenseInfo.second
+                
+                val oneYearMillis = 365 * 24 * 60 * 60 * 1000L
+                val isExpired = isUnlockedLocal && (System.currentTimeMillis() - acquisitionDate > oneYearMillis)
+                
+                if (isUnlockedLocal && !isExpired) {
+                    _isCoursesFeatureUnlockedState.value = true
+                    android.util.Log.d("PortfolioViewModel", "Licença ativa e dentro do prazo de validade (Expira em: ${java.util.Date(acquisitionDate + oneYearMillis)}).")
+                    return@launch
+                }
+                
+                // If local/firebase says expired, or not unlocked, let's verify Mercado Pago directly to see if they bought a newer license!
+                val token = com.example.BuildConfig.MERCADO_PAGO_ACCESS_TOKEN
+                if (token.isNotBlank() && !token.contains("YOUR_MERCADO_PAGO_ACCESS_TOKEN") && !token.contains("MERCADO_PAGO_ACCESS_TOKEN")) {
+                    // Gather all approved payments
+                    val approvedPayments = mutableListOf<com.example.data.remote.PaymentResult>()
+                    
+                    // Search by external_reference
+                    try {
+                        val responseByRef = com.example.data.remote.MercadoPagoClient.api.searchPayments(
+                            authorization = "Bearer $token",
+                            externalReference = user.uid,
+                            payerEmail = null
+                        )
+                        responseByRef.results?.filter { it.status == "approved" }?.let { approvedPayments.addAll(it) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("PortfolioViewModel", "Erro ao buscar pagamentos por ref no MP: ${e.localizedMessage}")
+                    }
+                    
+                    // Search by user email
+                    val email = user.email
+                    if (!email.isNullOrBlank()) {
+                        try {
+                            val responseByEmail = com.example.data.remote.MercadoPagoClient.api.searchPayments(
+                                authorization = "Bearer $token",
+                                externalReference = null,
+                                payerEmail = email
+                            )
+                            responseByEmail.results?.filter { it.status == "approved" }?.let { approvedPayments.addAll(it) }
+                        } catch (e: Exception) {
+                            android.util.Log.e("PortfolioViewModel", "Erro ao buscar pagamentos por email no MP: ${e.localizedMessage}")
+                        }
+                    }
+                    
+                    // Parse dates and find the most recent approved payment
+                    var mostRecentValidPaymentDate = 0L
+                    for (payment in approvedPayments) {
+                        val dateApprovedStr = payment.date_approved
+                        val paymentDate = if (!dateApprovedStr.isNullOrBlank()) {
+                            try {
+                                java.time.OffsetDateTime.parse(dateApprovedStr).toInstant().toEpochMilli()
+                            } catch (e: Exception) {
+                                // Fallback to current time if unparseable but approved
+                                System.currentTimeMillis()
+                            }
+                        } else {
+                            // Fallback if approved but date missing
+                            System.currentTimeMillis()
+                        }
+                        
+                        // Check if this payment is within 1 year
+                        if (System.currentTimeMillis() - paymentDate <= oneYearMillis) {
+                            if (paymentDate > mostRecentValidPaymentDate) {
+                                mostRecentValidPaymentDate = paymentDate
+                            }
+                        }
+                    }
+                    
+                    if (mostRecentValidPaymentDate > 0L) {
+                        // Found an unexpired approved payment on Mercado Pago! Reactivate/renew license
+                        firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, true, mostRecentValidPaymentDate)
+                        _isCoursesFeatureUnlockedState.value = true
+                        android.util.Log.d("PortfolioViewModel", "Licença validada e ativada/renovada via Mercado Pago (Data da compra: ${java.util.Date(mostRecentValidPaymentDate)}).")
+                        return@launch
+                    }
+                }
+                
+                // If we get here, no valid (unexpired) license is found either locally/firebase or on Mercado Pago
+                if (isUnlockedLocal && isExpired) {
+                    // Mark as expired in Firebase and local
+                    firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, false, acquisitionDate)
+                    _isCoursesFeatureUnlockedState.value = false
+                    android.util.Log.d("PortfolioViewModel", "Licença expirada (vencimento em 1 ano alcançado).")
+                } else {
+                    _isCoursesFeatureUnlockedState.value = false
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PortfolioViewModel", "Erro geral na verificação de licença: ${e.localizedMessage}")
+            }
+        }
     }
 
     fun checkLicenseStatusFromRailway() {
@@ -868,6 +997,23 @@ class PortfolioViewModel(
                     android.util.Log.e("PortfolioViewModel", "Erro ao verificar pagamentos diretamente no Mercado Pago: ${e.localizedMessage}")
                 }
             }
+        }
+    }
+
+    fun loadTestUsageCount() {
+        val user = firebaseSyncManager.currentUser.value ?: return
+        viewModelScope.launch {
+            val count = firebaseSyncManager.downloadTestUsageCount(user.uid, user.isSimulated)
+            _testUsageCountState.value = count
+        }
+    }
+
+    fun incrementTestUsageCount() {
+        val user = firebaseSyncManager.currentUser.value ?: return
+        viewModelScope.launch {
+            val newCount = _testUsageCountState.value + 1
+            _testUsageCountState.value = newCount
+            firebaseSyncManager.uploadTestUsageCount(user.uid, user.isSimulated, newCount)
         }
     }
 

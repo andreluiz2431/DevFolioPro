@@ -55,6 +55,98 @@ class FirebaseSyncManager(private val context: Context) {
         Log.d(TAG, "Sugestão de cursos liberada para o UID: $uid")
     }
 
+    suspend fun uploadLicenseStatus(uid: String, isSimulated: Boolean, unlocked: Boolean, acquisitionDate: Long) {
+        sharedPrefs.edit().apply {
+            putBoolean("courses_feature_unlocked_$uid", unlocked)
+            putLong("courses_feature_acquisition_date_$uid", acquisitionDate)
+            apply()
+        }
+        if (!isSimulated && _isFirebaseAvailable.value) {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("license").document("status")
+                val dataMap = mapOf(
+                    "unlocked" to unlocked,
+                    "acquisitionDate" to acquisitionDate,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                docRef.set(dataMap, com.google.firebase.firestore.SetOptions.merge()).await()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao salvar licenca no Firestore: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    suspend fun uploadTestUsageCount(uid: String, isSimulated: Boolean, count: Int) {
+        sharedPrefs.edit().putInt("test_usage_count_$uid", count).apply()
+        if (!isSimulated && _isFirebaseAvailable.value) {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("license").document("status")
+                val dataMap = mapOf(
+                    "testUsageCount" to count,
+                    "testCountUpdatedAt" to System.currentTimeMillis()
+                )
+                docRef.set(dataMap, com.google.firebase.firestore.SetOptions.merge()).await()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao salvar contagem de testes no Firestore: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    suspend fun downloadTestUsageCount(uid: String, isSimulated: Boolean): Int {
+        if (isSimulated || !_isFirebaseAvailable.value) {
+            return sharedPrefs.getInt("test_usage_count_$uid", 0)
+        } else {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("license").document("status")
+                val snapshot = docRef.get().await()
+                if (snapshot.exists()) {
+                    val count = snapshot.getLong("testUsageCount")?.toInt() ?: 0
+                    sharedPrefs.edit().putInt("test_usage_count_$uid", count).apply()
+                    return count
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao baixar contagem de testes do Firestore: ${e.localizedMessage}")
+            }
+            return sharedPrefs.getInt("test_usage_count_$uid", 0)
+        }
+    }
+
+    suspend fun downloadLicenseStatus(uid: String, isSimulated: Boolean): Pair<Boolean, Long> {
+        if (isSimulated || !_isFirebaseAvailable.value) {
+            val unlocked = sharedPrefs.getBoolean("courses_feature_unlocked_$uid", false)
+            val date = sharedPrefs.getLong("courses_feature_acquisition_date_$uid", 0L)
+            return Pair(unlocked, date)
+        } else {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("license").document("status")
+                val snapshot = docRef.get().await()
+                if (snapshot.exists()) {
+                    val unlocked = snapshot.getBoolean("unlocked") ?: false
+                    val date = snapshot.getLong("acquisitionDate") ?: 0L
+                    
+                    // Keep local synced
+                    sharedPrefs.edit().apply {
+                        putBoolean("courses_feature_unlocked_$uid", unlocked)
+                        putLong("courses_feature_acquisition_date_$uid", date)
+                        apply()
+                    }
+                    
+                    return Pair(unlocked, date)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao baixar licenca do Firestore: ${e.localizedMessage}")
+            }
+            // Fallback to local
+            val unlocked = sharedPrefs.getBoolean("courses_feature_unlocked_$uid", false)
+            val date = sharedPrefs.getLong("courses_feature_acquisition_date_$uid", 0L)
+            return Pair(unlocked, date)
+        }
+    }
+
     private val _isFirebaseAvailable = MutableStateFlow(false)
     val isFirebaseAvailable: StateFlow<Boolean> = _isFirebaseAvailable.asStateFlow()
 

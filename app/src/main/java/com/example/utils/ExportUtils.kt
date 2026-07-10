@@ -199,6 +199,8 @@ object ExportUtils {
         val bgColor = themeSettings.backgroundColorHex
         val textColor = themeSettings.textColorHex
 
+        val imageBase64 = getProfileImageBase64(context, profile.photoUrl)
+
         val skillsByCategory = skills.groupBy { it.category }
         val skillsHtml = StringBuilder()
         skillsByCategory.forEach { (category, skillList) ->
@@ -256,15 +258,20 @@ object ExportUtils {
                   <header class="rounded-[28px] p-8 md:p-12 text-white shadow-xl relative overflow-hidden" style="background: linear-gradient(135deg, $primaryColor, $secondaryColor)">
                     <div class="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-white opacity-10"></div>
                     <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div>
-                        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">${profile.name}</h1>
-                        <p class="text-lg md:text-xl font-medium mt-2 opacity-95">${profile.role}</p>
-                        <div class="flex items-center gap-2 mt-4 text-sm opacity-80">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                          <span>${profile.location}</span>
+                      <div class="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+                        ${if (!imageBase64.isNullOrBlank()) """
+                          <img src="$imageBase64" class="w-24 h-24 rounded-full object-cover border-4 border-white/20 shadow-md shrink-0 mx-auto md:mx-0" alt="Foto de perfil" />
+                        """ else ""}
+                        <div>
+                          <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">${profile.name}</h1>
+                          <p class="text-lg md:text-xl font-medium mt-2 opacity-95">${profile.role}</p>
+                          <div class="flex items-center justify-center md:justify-start gap-2 mt-4 text-sm opacity-80">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span>${profile.location}</span>
+                          </div>
                         </div>
                       </div>
-                      <div class="flex flex-wrap gap-3">
+                      <div class="flex flex-wrap gap-3 justify-center md:justify-start">
                         <a href="${profile.linkedinUrl}" target="_blank" class="px-6 py-3 bg-white text-gray-900 font-bold rounded-xl shadow-md hover:bg-gray-50 transition flex items-center gap-2">
                           LinkedIn
                         </a>
@@ -396,5 +403,27 @@ object ExportUtils {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(shareIntent, title))
+    }
+
+    private fun getProfileImageBase64(context: Context, photoUrlStr: String?): String? {
+        if (photoUrlStr.isNullOrBlank()) return null
+        try {
+            val uri = Uri.parse(photoUrlStr)
+            val inputStream = context.contentResolver.openInputStream(uri)
+            if (inputStream != null) {
+                val bytes = inputStream.readBytes()
+                inputStream.close()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                return "data:image/jpeg;base64,$base64"
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ExportUtils", "Erro ao converter imagem de perfil para base64: ${e.localizedMessage}")
+        }
+
+        // Fallback for direct remote URLs
+        if (photoUrlStr.startsWith("http://") || photoUrlStr.startsWith("https://")) {
+            return photoUrlStr
+        }
+        return null
     }
 }
