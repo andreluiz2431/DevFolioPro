@@ -23,13 +23,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
 import com.example.data.local.entities.SkillEntity
+import com.example.ui.viewmodel.ConflictResolution
 import com.example.data.remote.models.RecommendedSkillSuggestion
 import com.example.data.remote.models.ResumeImprovements
 import com.example.ui.home.FlowRow
 import com.example.ui.theme.toColor
 import com.example.ui.viewmodel.PortfolioViewModel
 import com.example.ui.viewmodel.ResumeCoachUiState
+import com.example.ui.viewmodel.FirebaseSyncUiState
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -77,6 +80,21 @@ fun ResumeCoachScreen(
     val isUnlocked by viewModel.isCoursesFeatureUnlockedState.collectAsState()
     val testUsageCount by viewModel.testUsageCountState.collectAsState()
     val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
+
+    val selectedResumeName by viewModel.selectedResumeName.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
+
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var saveAsNew by remember { mutableStateOf(false) }
+    var newNameInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(syncState) {
+        if (syncState is FirebaseSyncUiState.Success) {
+            Toast.makeText(context, (syncState as FirebaseSyncUiState.Success).message, Toast.LENGTH_SHORT).show()
+        } else if (syncState is FirebaseSyncUiState.Error) {
+            Toast.makeText(context, (syncState as FirebaseSyncUiState.Error).error, Toast.LENGTH_LONG).show()
+        }
+    }
 
     val checkoutUrl by viewModel.mercadoPagoCheckoutUrl.collectAsState()
     if (checkoutUrl != null) {
@@ -224,6 +242,113 @@ fun ResumeCoachScreen(
         )
     }
 
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = {
+                Text(
+                    text = "Opções de Envio à Nuvem",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Como deseja salvar as informações do currículo atual no Firebase?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { saveAsNew = false }
+                        ) {
+                            RadioButton(
+                                selected = !saveAsNew,
+                                onClick = { saveAsNew = false }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Substituir currículo atual: '$selectedResumeName'",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { saveAsNew = true }
+                        ) {
+                            RadioButton(
+                                selected = saveAsNew,
+                                onClick = { saveAsNew = true }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Criar novo currículo (separado)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    if (saveAsNew) {
+                        OutlinedTextField(
+                            value = newNameInput,
+                            onValueChange = { newNameInput = it },
+                            label = { Text("Nome/Propósito do Currículo") },
+                            placeholder = { Text("Ex: Vaga Mobile, DevOps...") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("coach_new_resume_name_input"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = primaryColor,
+                                focusedLabelColor = primaryColor
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (saveAsNew && newNameInput.isBlank()) {
+                            Toast.makeText(context, "Por favor, digite um nome válido!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val targetId = if (saveAsNew) newNameInput.trim() else selectedResumeName
+                            viewModel.syncWithCloud(ConflictResolution.PUSH_OVERWRITE, targetId)
+                            showSaveDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                    enabled = syncState !is FirebaseSyncUiState.Loading
+                ) {
+                    if (syncState is FirebaseSyncUiState.Loading) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Salvar")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) {
+                    Text("Cancelar", color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -299,7 +424,7 @@ fun ResumeCoachScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-            } else if (!isUnlocked && testUsageCount >= 2) {
+            } else if (!isUnlocked && testUsageCount >= 2 && coachState !is ResumeCoachUiState.Success && coachState !is ResumeCoachUiState.Loading) {
                 // Not premium lock screen (Free trial expired)
                 Column(
                     modifier = Modifier
@@ -1174,6 +1299,25 @@ fun ResumeCoachScreen(
                                         Icon(Icons.Default.CheckCircle, null)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Substituir Todos os Dados", fontWeight = FontWeight.Bold)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            if (currentUser == null) {
+                                                Toast.makeText(context, "Por favor, faça login primeiro para sincronizar com a nuvem!", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                saveAsNew = false
+                                                newNameInput = ""
+                                                showSaveDialog = true
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.CloudUpload, null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Enviar para Nuvem", fontWeight = FontWeight.Bold)
                                     }
 
                                     OutlinedButton(
