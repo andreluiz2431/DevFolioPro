@@ -152,6 +152,7 @@ fun CategoryCard(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: PortfolioViewModel,
@@ -166,8 +167,159 @@ fun SettingsScreen(
     val sections by viewModel.sectionOrders.collectAsState()
 
     val primaryColor = themeSettings.primaryColorHex.toColor()
+    val checkoutUrl by viewModel.mercadoPagoCheckoutUrl.collectAsState()
 
     var currentCategory by remember { mutableStateOf<SettingsCategory?>(null) }
+
+    // Render Checkout WebView Dialog if needed at root level so it's accessible across all tabs
+    if (checkoutUrl != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.resetMercadoPagoCheckout() },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            ),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            content = {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.background,
+                    tonalElevation = 8.dp
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Title bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = primaryColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Checkout Seguro Mercado Pago",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            
+                            // Manual fallback text button to unlock features if needed
+                            TextButton(
+                                onClick = {
+                                    viewModel.unlockCoursesFeature()
+                                    viewModel.resetMercadoPagoCheckout()
+                                },
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Liberar",
+                                    color = primaryColor,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                            
+                            IconButton(onClick = { viewModel.resetMercadoPagoCheckout() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Fechar checkout"
+                                )
+                            }
+                        }
+                        
+                        HorizontalDivider()
+                        
+                        // WebView loading the checkout
+                        Box(modifier = Modifier.weight(1f)) {
+                            AndroidView(
+                                factory = { context ->
+                                    WebView(context).apply {
+                                        settings.apply {
+                                            javaScriptEnabled = true
+                                            domStorageEnabled = true
+                                            databaseEnabled = true
+                                            loadWithOverviewMode = true
+                                            useWideViewPort = true
+                                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                            javaScriptCanOpenWindowsAutomatically = true
+                                            userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                        }
+                                        
+                                        val cookieManager = android.webkit.CookieManager.getInstance()
+                                        cookieManager.setAcceptCookie(true)
+                                        cookieManager.setAcceptThirdPartyCookies(this, true)
+                                        
+                                        webChromeClient = android.webkit.WebChromeClient()
+                                        
+                                        webViewClient = object : WebViewClient() {
+                                            private fun checkPaymentSuccess(url: String?): Boolean {
+                                                val lowerUrl = url?.lowercase() ?: ""
+                                                return lowerUrl.contains("success") || 
+                                                       lowerUrl.contains("approved") || 
+                                                       lowerUrl.contains("pending") || 
+                                                       lowerUrl.contains("congrats") || 
+                                                       lowerUrl.contains("feedback") || 
+                                                       lowerUrl.contains("complete") || 
+                                                       lowerUrl.contains("concluido") || 
+                                                       lowerUrl.contains("sucesso") || 
+                                                       lowerUrl.contains("aprovado") || 
+                                                       lowerUrl.contains("status=approved") || 
+                                                       lowerUrl.contains("status=pending") || 
+                                                       lowerUrl.contains("payment-success")
+                                            }
+
+                                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                                val url = request?.url?.toString() ?: ""
+                                                if (checkPaymentSuccess(url)) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                    return true
+                                                }
+                                                return false
+                                            }
+                                            
+                                            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                                super.onPageStarted(view, url, favicon)
+                                                if (checkPaymentSuccess(url)) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                }
+                                            }
+                                            
+                                            override fun onPageFinished(view: WebView?, url: String?) {
+                                                super.onPageFinished(view, url)
+                                                if (checkPaymentSuccess(url)) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                }
+                                            }
+                                        }
+                                        loadUrl(checkoutUrl!!)
+                                    }
+                                },
+                                update = { webView ->
+                                    // Update logic
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -3062,145 +3214,6 @@ fun CertificateRecommenderView(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Render Checkout WebView Dialog if needed
-        if (checkoutUrl != null) {
-            AlertDialog(
-                onDismissRequest = { viewModel.resetMercadoPagoCheckout() },
-                properties = androidx.compose.ui.window.DialogProperties(
-                    usePlatformDefaultWidth = false
-                ),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                content = {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.background,
-                        tonalElevation = 8.dp
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Title bar
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Security,
-                                        contentDescription = null,
-                                        tint = primaryColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Checkout Seguro Mercado Pago",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                                
-                                // Manual fallback text button to unlock features if needed
-                                TextButton(
-                                    onClick = {
-                                        viewModel.unlockCoursesFeature()
-                                        viewModel.resetMercadoPagoCheckout()
-                                    },
-                                    modifier = Modifier.padding(end = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "Liberar",
-                                        color = primaryColor,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
-                                
-                                IconButton(onClick = { viewModel.resetMercadoPagoCheckout() }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Fechar checkout"
-                                    )
-                                }
-                            }
-                            
-                            HorizontalDivider()
-                            
-                            // WebView loading the checkout
-                            Box(modifier = Modifier.weight(1f)) {
-                                AndroidView(
-                                    factory = { context ->
-                                        WebView(context).apply {
-                                            settings.apply {
-                                                javaScriptEnabled = true
-                                                domStorageEnabled = true
-                                                loadWithOverviewMode = true
-                                                useWideViewPort = true
-                                            }
-                                            webViewClient = object : WebViewClient() {
-                                                private fun checkPaymentSuccess(url: String?): Boolean {
-                                                    val lowerUrl = url?.lowercase() ?: ""
-                                                    return lowerUrl.contains("success") || 
-                                                           lowerUrl.contains("approved") || 
-                                                           lowerUrl.contains("pending") || 
-                                                           lowerUrl.contains("congrats") || 
-                                                           lowerUrl.contains("feedback") || 
-                                                           lowerUrl.contains("complete") || 
-                                                           lowerUrl.contains("concluido") || 
-                                                           lowerUrl.contains("sucesso") || 
-                                                           lowerUrl.contains("aprovado") || 
-                                                           lowerUrl.contains("status=approved") || 
-                                                           lowerUrl.contains("status=pending") || 
-                                                           lowerUrl.contains("payment-success")
-                                                }
-
-                                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                                    val url = request?.url?.toString() ?: ""
-                                                    if (checkPaymentSuccess(url)) {
-                                                        viewModel.unlockCoursesFeature()
-                                                        viewModel.resetMercadoPagoCheckout()
-                                                        return true
-                                                    }
-                                                    return false
-                                                }
-                                                
-                                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                                    super.onPageStarted(view, url, favicon)
-                                                    if (checkPaymentSuccess(url)) {
-                                                        viewModel.unlockCoursesFeature()
-                                                        viewModel.resetMercadoPagoCheckout()
-                                                    }
-                                                }
-                                                
-                                                override fun onPageFinished(view: WebView?, url: String?) {
-                                                    super.onPageFinished(view, url)
-                                                    if (checkPaymentSuccess(url)) {
-                                                        viewModel.unlockCoursesFeature()
-                                                        viewModel.resetMercadoPagoCheckout()
-                                                    }
-                                                }
-                                            }
-                                            loadUrl(checkoutUrl!!)
-                                        }
-                                    },
-                                    update = { webView ->
-                                        // Update logic
-                                    },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-        }
-
         if (currentUser == null) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -3390,7 +3403,7 @@ fun CertificateRecommenderView(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Pagar R$ 19,90 com Mercado Pago",
+                                text = "Pagar com Mercado Pago",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.bodyLarge
                             )
