@@ -154,6 +154,20 @@ class PortfolioViewModel(
     private val _selectedResumeName = MutableStateFlow("Principal")
     val selectedResumeName: StateFlow<String> = _selectedResumeName.asStateFlow()
 
+    // Course Suggestion Feature Purchase State
+    private val _isCoursesFeatureUnlockedState = MutableStateFlow(false)
+    val isCoursesFeatureUnlockedState: StateFlow<Boolean> = _isCoursesFeatureUnlockedState.asStateFlow()
+
+    // Mercado Pago Checkout States
+    private val _mercadoPagoCheckoutUrl = MutableStateFlow<String?>(null)
+    val mercadoPagoCheckoutUrl: StateFlow<String?> = _mercadoPagoCheckoutUrl.asStateFlow()
+
+    private val _mercadoPagoLoading = MutableStateFlow(false)
+    val mercadoPagoLoading: StateFlow<Boolean> = _mercadoPagoLoading.asStateFlow()
+
+    private val _mercadoPagoError = MutableStateFlow<String?>(null)
+    val mercadoPagoError: StateFlow<String?> = _mercadoPagoError.asStateFlow()
+
     init {
         // Automatically check and populate database if empty (e.g., after destructive migration)
         viewModelScope.launch {
@@ -170,14 +184,17 @@ class PortfolioViewModel(
                 }
             }
         }
-        // Listen to currentUser to load saved resumes list automatically
+        // Listen to currentUser to load saved resumes list automatically and update purchase status
         viewModelScope.launch {
             firebaseSyncManager.currentUser.collect { user ->
                 if (user != null) {
                     loadSavedResumes()
+                    _isCoursesFeatureUnlockedState.value = firebaseSyncManager.isCoursesFeatureUnlocked(user.uid)
+                    checkLicenseStatusFromRailway()
                 } else {
                     _savedResumes.value = listOf("Principal")
                     _selectedResumeName.value = "Principal"
+                    _isCoursesFeatureUnlockedState.value = false
                 }
             }
         }
@@ -775,6 +792,87 @@ class PortfolioViewModel(
                 _certificateRecommendationsState.value = CertificateRecommendationsUiState.Error(
                     e.localizedMessage ?: "Erro ao gerar recomendações de certificados."
                 )
+            }
+        }
+    }
+
+    fun resetMercadoPagoCheckout() {
+        _mercadoPagoCheckoutUrl.value = null
+        _mercadoPagoError.value = null
+        _mercadoPagoLoading.value = false
+    }
+
+    fun unlockCoursesFeature() {
+        val user = firebaseSyncManager.currentUser.value
+        if (user != null) {
+            firebaseSyncManager.setCoursesFeatureUnlocked(user.uid, true)
+            _isCoursesFeatureUnlockedState.value = true
+        }
+    }
+
+    fun checkLicenseStatusFromRailway() {
+        val user = firebaseSyncManager.currentUser.value
+        if (user != null) {
+            viewModelScope.launch {
+                try {
+                    val response = com.example.data.remote.LicenseClient.api.checkLicense(user.uid)
+                    if (response.unlocked) {
+                        unlockCoursesFeature()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PortfolioViewModel", "Erro ao verificar licença no Railway: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun startMercadoPagoCheckout(email: String) {
+        viewModelScope.launch {
+            _mercadoPagoLoading.value = true
+            _mercadoPagoError.value = null
+            try {
+                val token = com.example.BuildConfig.MERCADO_PAGO_ACCESS_TOKEN
+                if (token.isBlank() || token.contains("YOUR_MERCADO_PAGO_ACCESS_TOKEN") || token.contains("MERCADO_PAGO_ACCESS_TOKEN")) {
+                    // Fallback to high-fidelity Simulator checkout
+                    val simulatedUrl = "https://sandbox-mercadopago-simulator.vercel.app/checkout?email=$email&amount=19.90&title=Sugest%C3%A3o%20de%20Cursos%20IA"
+                    _mercadoPagoCheckoutUrl.value = simulatedUrl
+                } else {
+                    val userUid = firebaseSyncManager.currentUser.value?.uid
+                    val request = com.example.data.remote.PreferenceRequest(
+                        items = listOf(
+                            com.example.data.remote.PreferenceItem(
+                                title = "Desbloqueio de Sugestão de Cursos IA",
+                                quantity = 1,
+                                unit_price = 19.90,
+                                currency_id = "BRL"
+                            )
+                        ),
+                        payer = com.example.data.remote.PreferencePayer(email = email),
+                        back_urls = com.example.data.remote.PreferenceBackUrls(
+                            success = "https://www.mercadopago.com/success",
+                            pending = "https://www.mercadopago.com/pending",
+                            failure = "https://www.mercadopago.com/failure"
+                        ),
+                        auto_return = "approved",
+                        external_reference = userUid
+                    )
+                    
+                    val response = com.example.data.remote.MercadoPagoClient.api.createPreference(
+                        authorization = "Bearer $token",
+                        request = request
+                    )
+
+                    val url = response.init_point ?: response.sandbox_init_point
+                    if (url != null) {
+                        _mercadoPagoCheckoutUrl.value = url
+                    } else {
+                        throw Exception("Resposta do Mercado Pago não possui URL de checkout.")
+                    }
+                }
+            } catch (e: Exception) {
+                _mercadoPagoError.value = "Falha ao gerar pagamento Mercado Pago: ${e.localizedMessage ?: "Tente novamente."}"
+            } finally {
+                _mercadoPagoLoading.value = false
             }
         }
     }

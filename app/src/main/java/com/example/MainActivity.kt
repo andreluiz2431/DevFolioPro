@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
             val themeSettings by viewModel.themeSettings.collectAsState()
             val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
             val syncState by viewModel.syncState.collectAsState()
+            val isPremium by viewModel.isCoursesFeatureUnlockedState.collectAsState()
             val context = LocalContext.current
 
             var showProfileDialog by remember { mutableStateOf(false) }
@@ -155,10 +156,26 @@ class MainActivity : ComponentActivity() {
                                 selected = selectedTab == 2,
                                 onClick = { selectedTab = 2 },
                                 icon = {
-                                    Icon(
-                                        imageVector = if (selectedTab == 2) Icons.Default.Build else Icons.Outlined.Build,
-                                        contentDescription = "Serviços"
-                                    )
+                                    BadgedBox(
+                                        badge = {
+                                            if (isPremium) {
+                                                Badge(
+                                                    containerColor = Color(0xFFFFD700), // Gold
+                                                    contentColor = Color(0xFF1C1B1F)
+                                                ) {
+                                                    Text(
+                                                        text = "PRO",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedTab == 2) Icons.Default.Build else Icons.Outlined.Build,
+                                            contentDescription = "Serviços"
+                                        )
+                                    }
                                 },
                                 label = { Text("Serviços") },
                                 colors = NavigationBarItemDefaults.colors(

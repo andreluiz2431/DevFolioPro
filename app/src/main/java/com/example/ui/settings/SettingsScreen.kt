@@ -33,6 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.BuildConfig
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.local.entities.CertificateEntity
 import com.example.data.local.entities.ExperienceEntity
 import com.example.data.local.entities.ProfileEntity
@@ -78,6 +82,11 @@ enum class SettingsCategory(
         title = "Sugestão de Cursos",
         description = "Descubra certificados relevantes com base nas suas habilidades.",
         icon = Icons.Default.School
+    ),
+    LICENSES(
+        title = "Licenças Ativas",
+        description = "Consulte e gerencie suas licenças e recursos premium adquiridos.",
+        icon = Icons.Default.Verified
     )
 }
 
@@ -241,6 +250,12 @@ fun SettingsScreen(
                             category = SettingsCategory.CERTIFICATE_RECOMMENDER,
                             primaryColor = primaryColor,
                             onClick = { currentCategory = SettingsCategory.CERTIFICATE_RECOMMENDER },
+                            modifier = Modifier.weight(1f)
+                        )
+                        CategoryCard(
+                            category = SettingsCategory.LICENSES,
+                            primaryColor = primaryColor,
+                            onClick = { currentCategory = SettingsCategory.LICENSES },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -481,6 +496,14 @@ fun SettingsScreen(
                 SettingsCategory.CERTIFICATE_RECOMMENDER -> {
                     item {
                         CertificateRecommenderView(
+                            viewModel = viewModel,
+                            primaryColor = primaryColor
+                        )
+                    }
+                }
+                SettingsCategory.LICENSES -> {
+                    item {
+                        ActiveLicensesView(
                             viewModel = viewModel,
                             primaryColor = primaryColor
                         )
@@ -3013,6 +3036,7 @@ fun CertificatesSettings(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun CertificateRecommenderView(
     viewModel: PortfolioViewModel,
@@ -3023,6 +3047,12 @@ fun CertificateRecommenderView(
     val skills by viewModel.skills.collectAsState()
     val experiences by viewModel.experiences.collectAsState()
     
+    val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
+    val isUnlocked by viewModel.isCoursesFeatureUnlockedState.collectAsState()
+    val checkoutUrl by viewModel.mercadoPagoCheckoutUrl.collectAsState()
+    val isCheckoutLoading by viewModel.mercadoPagoLoading.collectAsState()
+    val checkoutError by viewModel.mercadoPagoError.collectAsState()
+    
     // Track which recommendations have been added as achievements to provide dynamic feedback
     var addedCertificates by remember { mutableStateOf(setOf<String>()) }
 
@@ -3032,8 +3062,344 @@ fun CertificateRecommenderView(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        
-        when (state) {
+        // Render Checkout WebView Dialog if needed
+        if (checkoutUrl != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.resetMercadoPagoCheckout() },
+                properties = androidx.compose.ui.window.DialogProperties(
+                    usePlatformDefaultWidth = false
+                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                content = {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.background,
+                        tonalElevation = 8.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Title bar
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Security,
+                                        contentDescription = null,
+                                        tint = primaryColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Checkout Seguro Mercado Pago",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                
+                                // Manual fallback text button to unlock features if needed
+                                TextButton(
+                                    onClick = {
+                                        viewModel.unlockCoursesFeature()
+                                        viewModel.resetMercadoPagoCheckout()
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Liberar",
+                                        color = primaryColor,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                                
+                                IconButton(onClick = { viewModel.resetMercadoPagoCheckout() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Fechar checkout"
+                                    )
+                                }
+                            }
+                            
+                            HorizontalDivider()
+                            
+                            // WebView loading the checkout
+                            Box(modifier = Modifier.weight(1f)) {
+                                AndroidView(
+                                    factory = { context ->
+                                        WebView(context).apply {
+                                            settings.apply {
+                                                javaScriptEnabled = true
+                                                domStorageEnabled = true
+                                                loadWithOverviewMode = true
+                                                useWideViewPort = true
+                                            }
+                                            webViewClient = object : WebViewClient() {
+                                                private fun checkPaymentSuccess(url: String?): Boolean {
+                                                    val lowerUrl = url?.lowercase() ?: ""
+                                                    return lowerUrl.contains("success") || 
+                                                           lowerUrl.contains("approved") || 
+                                                           lowerUrl.contains("pending") || 
+                                                           lowerUrl.contains("congrats") || 
+                                                           lowerUrl.contains("feedback") || 
+                                                           lowerUrl.contains("complete") || 
+                                                           lowerUrl.contains("concluido") || 
+                                                           lowerUrl.contains("sucesso") || 
+                                                           lowerUrl.contains("aprovado") || 
+                                                           lowerUrl.contains("status=approved") || 
+                                                           lowerUrl.contains("status=pending") || 
+                                                           lowerUrl.contains("payment-success")
+                                                }
+
+                                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                                    val url = request?.url?.toString() ?: ""
+                                                    if (checkPaymentSuccess(url)) {
+                                                        viewModel.unlockCoursesFeature()
+                                                        viewModel.resetMercadoPagoCheckout()
+                                                        return true
+                                                    }
+                                                    return false
+                                                }
+                                                
+                                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                                    super.onPageStarted(view, url, favicon)
+                                                    if (checkPaymentSuccess(url)) {
+                                                        viewModel.unlockCoursesFeature()
+                                                        viewModel.resetMercadoPagoCheckout()
+                                                    }
+                                                }
+                                                
+                                                override fun onPageFinished(view: WebView?, url: String?) {
+                                                    super.onPageFinished(view, url)
+                                                    if (checkPaymentSuccess(url)) {
+                                                        viewModel.unlockCoursesFeature()
+                                                        viewModel.resetMercadoPagoCheckout()
+                                                    }
+                                                }
+                                            }
+                                            loadUrl(checkoutUrl!!)
+                                        }
+                                    },
+                                    update = { webView ->
+                                        // Update logic
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+        }
+
+        if (currentUser == null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Acesso Bloqueado: Conecte-se",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Text(
+                        text = "Para desbloquear as sugestões inteligentes de cursos e certificações com o Mercado Pago, você precisa primeiro entrar na sua conta. Isso permite que sua compra seja vinculada com segurança.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    
+                    Text(
+                        text = "Por favor, vá para a seção 'Sincronizar Nuvem' no topo para entrar ou se cadastrar.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else if (!isUnlocked) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                ),
+                border = BorderStroke(1.5.dp, primaryColor.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(primaryColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.WorkspacePremium,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Sugestão de Cursos Premium",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Surface(
+                        color = primaryColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "RECURSO EXCLUSIVO",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                            color = primaryColor,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Desbloqueie o acesso vitalício à ferramenta de IA para mapear as habilidades do seu currículo e receber recomendações dos melhores cursos e certificações de TI do mercado.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(text = "Recomendações baseadas nas suas competências", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(text = "Foco em certificações valorizadas no mercado de TI", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(text = "Links e sugestões organizadas de forma didática", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Valor único do desbloqueio:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "R$",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = primaryColor,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                            Text(
+                                text = "19,90",
+                                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.ExtraBold),
+                                color = primaryColor
+                            )
+                        }
+                    }
+
+                    if (checkoutError != null) {
+                        Text(
+                            text = checkoutError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    if (isCheckoutLoading) {
+                        CircularProgressIndicator(color = primaryColor)
+                    } else {
+                        Button(
+                            onClick = { viewModel.startMercadoPagoCheckout(currentUser?.email ?: "pagamento@portfolio.com") },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .testTag("pay_mercado_pago_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Payment,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Pagar R$ 19,90 com Mercado Pago",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            when (state) {
             is CertificateRecommendationsUiState.Idle -> {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -3376,6 +3742,293 @@ fun CertificateRecommenderView(
                         ) {
                             Text(text = "Tentar Novamente", fontWeight = FontWeight.Bold)
                         }
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+@Composable
+fun ActiveLicensesView(
+    viewModel: PortfolioViewModel,
+    primaryColor: Color
+) {
+    val context = LocalContext.current
+    val currentUser by viewModel.firebaseSyncManager.currentUser.collectAsState()
+    val isCoursesUnlocked by viewModel.isCoursesFeatureUnlockedState.collectAsState()
+    val isCheckoutLoading by viewModel.mercadoPagoLoading.collectAsState()
+    val checkoutError by viewModel.mercadoPagoError.collectAsState()
+    
+    val uid = currentUser?.uid ?: "usuario_anonimo"
+    val email = currentUser?.email ?: "Não logado"
+    val userName = currentUser?.displayName ?: "Usuário"
+    
+    val licenseCodeCourses = "LIC-MP-CURSOS-${uid.takeLast(6).uppercase()}"
+    val licenseCodeBase = "LIC-BASE-PORT-${uid.takeLast(6).uppercase()}"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Hero Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = primaryColor.copy(alpha = 0.08f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WorkspacePremium,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        text = "Suas Licenças e Certificações",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = "Aqui você pode gerenciar e consultar o status de todas as licenças adquiridas para os recursos inteligentes do seu aplicativo de Portfólio.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // License 1: Base Portfolio
+        LicenseCard(
+            title = "Licença Portfólio Base",
+            licenseId = licenseCodeBase,
+            status = "Ativa (Inclusa)",
+            statusColor = Color(0xFF4CAF50),
+            description = "Acesso completo à edição de dados do portfólio, sincronização básica em nuvem e exportação de currículos em formato JSON e PDF.",
+            details = listOf(
+                "Beneficiário: $userName",
+                "E-mail: $email",
+                "Validade: Vitalícia",
+                "Tipo: Licença Gratuita de Entrada"
+            ),
+            primaryColor = primaryColor
+        )
+
+        // License 2: Course Suggester
+        if (isCoursesUnlocked) {
+            LicenseCard(
+                title = "Licença Inteligente: Sugestão de Cursos IA",
+                licenseId = licenseCodeCourses,
+                status = "Ativa (Premium)",
+                statusColor = Color(0xFF4CAF50),
+                description = "Habilita a ferramenta inteligente de análise de lacunas profissionais com sugestões personalizadas de certificados emitidas por inteligência artificial.",
+                details = listOf(
+                    "Beneficiário: $userName",
+                    "E-mail: $email",
+                    "Adquirido via: Mercado Pago Checkout",
+                    "Tipo: Licença Premium Vitalícia",
+                    "Status do Pagamento: Aprovado"
+                ),
+                primaryColor = primaryColor,
+                isPremium = true
+            )
+        } else {
+            // Show available license with option to purchase
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Licença Inteligente: Sugestão de Cursos",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(100),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ) {
+                            Text(
+                                text = "Não Adquirida",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Desbloqueie recomendações automáticas de cursos, certificados e lacunas de habilidades para o seu perfil técnico utilizando inteligência artificial.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (checkoutError != null) {
+                        Text(
+                            text = checkoutError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Valor Único",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "R$ 19,90",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = primaryColor
+                            )
+                        }
+                        if (isCheckoutLoading) {
+                            CircularProgressIndicator(
+                                color = primaryColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Button(
+                                onClick = {
+                                    if (currentUser == null) {
+                                        Toast.makeText(context, "Por favor, faça login para adquirir a licença.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        viewModel.startMercadoPagoCheckout(email)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ShoppingCart,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Adquirir")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LicenseCard(
+    title: String,
+    licenseId: String,
+    status: String,
+    statusColor: Color,
+    description: String,
+    details: List<String>,
+    primaryColor: Color,
+    isPremium: Boolean = false
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, if (isPremium) primaryColor.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPremium) primaryColor.copy(alpha = 0.02f) else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "ID: $licenseId",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(100),
+                    color = statusColor.copy(alpha = 0.15f),
+                    contentColor = statusColor
+                ) {
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                details.forEach { detail ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isPremium) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        )
+                        Text(
+                            text = detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

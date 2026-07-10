@@ -46,6 +46,15 @@ class FirebaseSyncManager(private val context: Context) {
     private val _currentUser = MutableStateFlow<UserSession?>(null)
     val currentUser: StateFlow<UserSession?> = _currentUser.asStateFlow()
 
+    fun isCoursesFeatureUnlocked(uid: String): Boolean {
+        return sharedPrefs.getBoolean("courses_feature_unlocked_$uid", false)
+    }
+
+    fun setCoursesFeatureUnlocked(uid: String, unlocked: Boolean) {
+        sharedPrefs.edit().putBoolean("courses_feature_unlocked_$uid", unlocked).apply()
+        Log.d(TAG, "Sugestão de cursos liberada para o UID: $uid")
+    }
+
     private val _isFirebaseAvailable = MutableStateFlow(false)
     val isFirebaseAvailable: StateFlow<Boolean> = _isFirebaseAvailable.asStateFlow()
 
