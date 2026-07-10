@@ -168,6 +168,8 @@ class PortfolioViewModel(
     private val _mercadoPagoError = MutableStateFlow<String?>(null)
     val mercadoPagoError: StateFlow<String?> = _mercadoPagoError.asStateFlow()
 
+    private var checkoutPollingJob: kotlinx.coroutines.Job? = null
+
     init {
         // Automatically check and populate database if empty (e.g., after destructive migration)
         viewModelScope.launch {
@@ -191,6 +193,7 @@ class PortfolioViewModel(
                     loadSavedResumes()
                     _isCoursesFeatureUnlockedState.value = firebaseSyncManager.isCoursesFeatureUnlocked(user.uid)
                     checkLicenseStatusFromRailway()
+                    checkMercadoPagoPaymentStatusDirectly()
                 } else {
                     _savedResumes.value = listOf("Principal")
                     _selectedResumeName.value = "Principal"
@@ -797,6 +800,8 @@ class PortfolioViewModel(
     }
 
     fun resetMercadoPagoCheckout() {
+        checkoutPollingJob?.cancel()
+        checkoutPollingJob = null
         _mercadoPagoCheckoutUrl.value = null
         _mercadoPagoError.value = null
         _mercadoPagoLoading.value = false
@@ -806,8 +811,8 @@ class PortfolioViewModel(
         val user = firebaseSyncManager.currentUser.value
         if (user != null) {
             firebaseSyncManager.setCoursesFeatureUnlocked(user.uid, true)
-            _isCoursesFeatureUnlockedState.value = true
         }
+        _isCoursesFeatureUnlockedState.value = true
     }
 
     fun checkLicenseStatusFromRailway() {
@@ -821,6 +826,46 @@ class PortfolioViewModel(
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("PortfolioViewModel", "Erro ao verificar licença no Railway: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun checkMercadoPagoPaymentStatusDirectly() {
+        val user = firebaseSyncManager.currentUser.value
+        if (user != null) {
+            viewModelScope.launch {
+                try {
+                    val token = com.example.BuildConfig.MERCADO_PAGO_ACCESS_TOKEN
+                    if (token.isNotBlank() && !token.contains("YOUR_MERCADO_PAGO_ACCESS_TOKEN") && !token.contains("MERCADO_PAGO_ACCESS_TOKEN")) {
+                        // Check by external_reference (user.uid)
+                        val responseByRef = com.example.data.remote.MercadoPagoClient.api.searchPayments(
+                            authorization = "Bearer $token",
+                            externalReference = user.uid,
+                            payerEmail = null
+                        )
+                        val hasApprovedRef = responseByRef.results?.any { it.status == "approved" } == true
+                        if (hasApprovedRef) {
+                            unlockCoursesFeature()
+                            return@launch
+                        }
+
+                        // Check by user email
+                        val email = user.email
+                        if (!email.isNullOrBlank()) {
+                            val responseByEmail = com.example.data.remote.MercadoPagoClient.api.searchPayments(
+                                authorization = "Bearer $token",
+                                externalReference = null,
+                                payerEmail = email
+                            )
+                            val hasApprovedEmail = responseByEmail.results?.any { it.status == "approved" } == true
+                            if (hasApprovedEmail) {
+                                unlockCoursesFeature()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PortfolioViewModel", "Erro ao verificar pagamentos diretamente no Mercado Pago: ${e.localizedMessage}")
                 }
             }
         }
@@ -869,10 +914,34 @@ class PortfolioViewModel(
                         throw Exception("Resposta do Mercado Pago não possui URL de checkout.")
                     }
                 }
+
+                // Start polling Railway license status in background while checkout is open
+                startLicensePolling()
+
             } catch (e: Exception) {
                 _mercadoPagoError.value = "Falha ao gerar pagamento Mercado Pago: ${e.localizedMessage ?: "Tente novamente."}"
             } finally {
                 _mercadoPagoLoading.value = false
+            }
+        }
+    }
+
+    private fun startLicensePolling() {
+        checkoutPollingJob?.cancel()
+        val user = firebaseSyncManager.currentUser.value ?: return
+        checkoutPollingJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(4000)
+                try {
+                    val response = com.example.data.remote.LicenseClient.api.checkLicense(user.uid)
+                    if (response.unlocked) {
+                        unlockCoursesFeature()
+                        resetMercadoPagoCheckout()
+                        break
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PortfolioViewModel", "Erro de polling da licença: ${e.localizedMessage}")
+                }
             }
         }
     }

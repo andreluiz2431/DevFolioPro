@@ -254,14 +254,42 @@ fun SettingsScreen(
                                             useWideViewPort = true
                                             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                             javaScriptCanOpenWindowsAutomatically = true
-                                            userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                                         }
                                         
                                         val cookieManager = android.webkit.CookieManager.getInstance()
                                         cookieManager.setAcceptCookie(true)
                                         cookieManager.setAcceptThirdPartyCookies(this, true)
                                         
-                                        webChromeClient = android.webkit.WebChromeClient()
+                                        webChromeClient = object : android.webkit.WebChromeClient() {
+                                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                                super.onReceivedTitle(view, title)
+                                                val lowerTitle = title?.lowercase() ?: ""
+                                                val hasSuccessWord = lowerTitle.contains("sucesso") || 
+                                                                     lowerTitle.contains("aprovado") || 
+                                                                     lowerTitle.contains("pago com sucesso") || 
+                                                                     lowerTitle.contains("pagamento aprovado") || 
+                                                                     lowerTitle.contains("success") || 
+                                                                     lowerTitle.contains("approved") || 
+                                                                     lowerTitle.contains("congrats") || 
+                                                                     lowerTitle.contains("concluído") || 
+                                                                     lowerTitle.contains("concluido") || 
+                                                                     lowerTitle.contains("parabéns") || 
+                                                                     lowerTitle.contains("parabens") || 
+                                                                     lowerTitle.contains("obrigado")
+                                                
+                                                val hasNegativeWord = lowerTitle.contains("falha") || 
+                                                                      lowerTitle.contains("falhou") || 
+                                                                      lowerTitle.contains("erro") || 
+                                                                      lowerTitle.contains("negado") || 
+                                                                      lowerTitle.contains("recusado")
+                                                
+                                                if (hasSuccessWord && !hasNegativeWord) {
+                                                    viewModel.unlockCoursesFeature()
+                                                    viewModel.resetMercadoPagoCheckout()
+                                                }
+                                            }
+                                        }
                                         
                                         webViewClient = object : WebViewClient() {
                                             private fun checkPaymentSuccess(url: String?): Boolean {

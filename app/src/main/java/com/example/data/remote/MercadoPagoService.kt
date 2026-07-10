@@ -8,7 +8,22 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.GET
+import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
+
+@JsonClass(generateAdapter = true)
+data class PaymentResult(
+    val id: Long?,
+    val status: String?,
+    val external_reference: String?,
+    val status_detail: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class PaymentSearchResponse(
+    val results: List<PaymentResult>?
+)
 
 @JsonClass(generateAdapter = true)
 data class PreferenceItem(
@@ -52,6 +67,13 @@ interface MercadoPagoApi {
         @Header("Authorization") authorization: String,
         @Body request: PreferenceRequest
     ): PreferenceResponse
+
+    @GET("v1/payments/search")
+    suspend fun searchPayments(
+        @Header("Authorization") authorization: String,
+        @Query("external_reference") externalReference: String?,
+        @Query("payer.email") payerEmail: String? = null
+    ): PaymentSearchResponse
 }
 
 object MercadoPagoClient {
