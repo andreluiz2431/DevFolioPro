@@ -280,14 +280,71 @@ fun SettingsScreen(
                                                        lowerUrl.contains("payment-success")
                                             }
 
-                                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                                val url = request?.url?.toString() ?: ""
-                                                if (checkPaymentSuccess(url)) {
+                                            private fun handleUrlOverride(view: WebView?, urlString: String): Boolean {
+                                                if (checkPaymentSuccess(urlString)) {
                                                     viewModel.unlockCoursesFeature()
                                                     viewModel.resetMercadoPagoCheckout()
                                                     return true
                                                 }
-                                                return false
+
+                                                if (urlString.startsWith("http://") || urlString.startsWith("https://")) {
+                                                    return false // Let WebView handle it normally
+                                                }
+
+                                                // Intercept Mercado Pago deep link redirecting to their app-specific webview scheme
+                                                if (urlString.startsWith("mercadopago://") || urlString.startsWith("mpago://")) {
+                                                    try {
+                                                        val uri = android.net.Uri.parse(urlString)
+                                                        val nestedUrl = uri.getQueryParameter("url")
+                                                        if (!nestedUrl.isNullOrEmpty() && (nestedUrl.startsWith("http://") || nestedUrl.startsWith("https://"))) {
+                                                            view?.loadUrl(nestedUrl)
+                                                            return true
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                }
+
+                                                // Generic custom scheme handling (e.g. app intents, other apps)
+                                                try {
+                                                    val intent = android.content.Intent.parseUri(urlString, android.content.Intent.URI_INTENT_SCHEME)
+                                                    if (intent != null) {
+                                                        val packageManager = context.packageManager
+                                                        if (intent.resolveActivity(packageManager) != null) {
+                                                            context.startActivity(intent)
+                                                            return true
+                                                        } else {
+                                                            val fallbackUrl = intent.getStringExtra("browser_fallback_url")
+                                                            if (!fallbackUrl.isNullOrEmpty() && (fallbackUrl.startsWith("http://") || fallbackUrl.startsWith("https://"))) {
+                                                                view?.loadUrl(fallbackUrl)
+                                                                return true
+                                                            }
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+
+                                                // Fallback try for direct custom scheme launch (e.g., whatsapp, tel, etc.)
+                                                try {
+                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(urlString))
+                                                    context.startActivity(intent)
+                                                    return true
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+
+                                                return true // Prevent WebView from trying to load unknown scheme and showing error page
+                                            }
+
+                                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                                val url = request?.url?.toString() ?: ""
+                                                return handleUrlOverride(view, url)
+                                            }
+
+                                            @Deprecated("Deprecated in Java")
+                                            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                                                return handleUrlOverride(view, url ?: "")
                                             }
                                             
                                             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
