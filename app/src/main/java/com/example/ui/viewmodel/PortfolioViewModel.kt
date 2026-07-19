@@ -158,6 +158,10 @@ class PortfolioViewModel(
     private val _isCoursesFeatureUnlockedState = MutableStateFlow(false)
     val isCoursesFeatureUnlockedState: StateFlow<Boolean> = _isCoursesFeatureUnlockedState.asStateFlow()
 
+    // Course Suggestion Feature Purchase Acquisition Date
+    private val _coursesFeatureAcquisitionDateState = MutableStateFlow(0L)
+    val coursesFeatureAcquisitionDateState: StateFlow<Long> = _coursesFeatureAcquisitionDateState.asStateFlow()
+
     // Test phase usage count state
     private val _testUsageCountState = MutableStateFlow(0)
     val testUsageCountState: StateFlow<Int> = _testUsageCountState.asStateFlow()
@@ -201,6 +205,7 @@ class PortfolioViewModel(
                     _savedResumes.value = listOf("Principal")
                     _selectedResumeName.value = "Principal"
                     _isCoursesFeatureUnlockedState.value = false
+                    _coursesFeatureAcquisitionDateState.value = 0L
                     _testUsageCountState.value = 0
                 }
             }
@@ -821,6 +826,7 @@ class PortfolioViewModel(
                 firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, true, acquisitionDate)
             }
         }
+        _coursesFeatureAcquisitionDateState.value = acquisitionDate
         _isCoursesFeatureUnlockedState.value = true
     }
 
@@ -858,6 +864,7 @@ class PortfolioViewModel(
                 val isExpired = isUnlockedLocal && (System.currentTimeMillis() - acquisitionDate > oneYearMillis)
                 
                 if (isUnlockedLocal && !isExpired) {
+                    _coursesFeatureAcquisitionDateState.value = acquisitionDate
                     _isCoursesFeatureUnlockedState.value = true
                     android.util.Log.d("PortfolioViewModel", "Licença ativa e dentro do prazo de validade (Expira em: ${java.util.Date(acquisitionDate + oneYearMillis)}).")
                     return@launch
@@ -923,6 +930,7 @@ class PortfolioViewModel(
                     if (mostRecentValidPaymentDate > 0L) {
                         // Found an unexpired approved payment on Mercado Pago! Reactivate/renew license
                         firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, true, mostRecentValidPaymentDate)
+                        _coursesFeatureAcquisitionDateState.value = mostRecentValidPaymentDate
                         _isCoursesFeatureUnlockedState.value = true
                         android.util.Log.d("PortfolioViewModel", "Licença validada e ativada/renovada via Mercado Pago (Data da compra: ${java.util.Date(mostRecentValidPaymentDate)}).")
                         return@launch
@@ -933,9 +941,11 @@ class PortfolioViewModel(
                 if (isUnlockedLocal && isExpired) {
                     // Mark as expired in Firebase and local
                     firebaseSyncManager.uploadLicenseStatus(user.uid, user.isSimulated, false, acquisitionDate)
+                    _coursesFeatureAcquisitionDateState.value = 0L
                     _isCoursesFeatureUnlockedState.value = false
                     android.util.Log.d("PortfolioViewModel", "Licença expirada (vencimento em 1 ano alcançado).")
                 } else {
+                    _coursesFeatureAcquisitionDateState.value = 0L
                     _isCoursesFeatureUnlockedState.value = false
                 }
             } catch (e: Exception) {
