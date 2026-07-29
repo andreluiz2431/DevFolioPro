@@ -5,6 +5,10 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
@@ -77,6 +81,7 @@ fun HomeScreen(
     var showAddExperienceDialog by remember { mutableStateOf(false) }
     var showAddCertificateDialog by remember { mutableStateOf(false) }
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
+    var showCourseSuggestionsDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -153,7 +158,8 @@ fun HomeScreen(
                         isEditMode = true
                     },
                     onOpenExport = { showExportDialog = true },
-                    onOpenImport = { showImportDialog = true }
+                    onOpenImport = { showImportDialog = true },
+                    onOpenCourseSuggestions = { showCourseSuggestionsDialog = true }
                 )
             }
 
@@ -246,7 +252,8 @@ fun HomeScreen(
                                     primaryColor = primaryColor,
                                     isEditMode = isEditMode,
                                     onAddCertificate = { showAddCertificateDialog = true },
-                                    onRemoveCertificate = { id -> viewModel.removeCertificate(id) }
+                                    onRemoveCertificate = { id -> viewModel.removeCertificate(id) },
+                                    onOpenCourseSuggestions = { showCourseSuggestionsDialog = true }
                                 )
                             }
                         }
@@ -427,6 +434,27 @@ fun HomeScreen(
                                 Text("Importar Dados (PDF/Texto)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                             }
                         }
+
+                        // Action 4: Sugestão de Cursos (IA)
+                        SmallFloatingActionButton(
+                            onClick = {
+                                isFabExpanded = false
+                                showCourseSuggestionsDialog = true
+                            },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            elevation = FloatingActionButtonDefaults.elevation(6.dp),
+                            modifier = Modifier.testTag("fab_course_suggestions")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp), tint = primaryColor)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sugestão de Cursos (IA)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
                     }
                 }
 
@@ -499,6 +527,14 @@ fun HomeScreen(
                 showSaveConfirmDialog = false
                 isEditMode = false
             }
+        )
+    }
+
+    if (showCourseSuggestionsDialog) {
+        CourseSuggestionsDialog(
+            viewModel = viewModel,
+            primaryColor = primaryColor,
+            onDismiss = { showCourseSuggestionsDialog = false }
         )
     }
 
@@ -636,7 +672,8 @@ fun HeroHeaderCard(
     secondaryColor: Color,
     onNavigateToEdit: () -> Unit = {},
     onOpenExport: () -> Unit = {},
-    onOpenImport: () -> Unit = {}
+    onOpenImport: () -> Unit = {},
+    onOpenCourseSuggestions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     Card(
@@ -790,7 +827,7 @@ fun HeroHeaderCard(
 
                 // Portfolio Control Actions Row (Edit, Export, Import)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -1497,11 +1534,82 @@ fun CertificatesSection(
     primaryColor: Color,
     isEditMode: Boolean = false,
     onAddCertificate: () -> Unit = {},
-    onRemoveCertificate: (Int) -> Unit = {}
+    onRemoveCertificate: (Int) -> Unit = {},
+    onOpenCourseSuggestions: () -> Unit = {}
 ) {
     var selectedImageForDialog by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // AI Course Suggestions Highlight Banner Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenCourseSuggestions() }
+                .testTag("course_suggestions_banner_card"),
+            colors = CardDefaults.cardColors(
+                containerColor = primaryColor.copy(alpha = 0.08f)
+            ),
+            border = BorderStroke(1.2.dp, primaryColor.copy(alpha = 0.3f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Sugestão de Cursos com IA",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            color = primaryColor,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "IA",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Toque para ver recomendações personalizadas de cursos e certificações para o seu perfil.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
         if (isEditMode) {
             OutlinedButton(
                 onClick = onAddCertificate,
@@ -1515,11 +1623,34 @@ fun CertificatesSection(
         }
 
         if (certificates.isEmpty() && !isEditMode) {
-            Text(
-                text = "Nenhum certificado cadastrado ainda.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎓 Nenhum curso ou certificado cadastrado ainda",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Destaque seu currículo adicionando suas formações ou descubra cursos e certificações valiosas recomendadas pela nossa IA para o seu objetivo de carreira.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
             return
         }
 
@@ -2705,5 +2836,66 @@ fun ImportOptionsDialog(
                 Text(if (importState is LinkedInImportUiState.Success) "Concluir" else "Fechar")
             }
         }
+    )
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun CourseSuggestionsDialog(
+    viewModel: PortfolioViewModel,
+    primaryColor: Color,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Sugestão de Cursos com IA",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Fechar")
+                }
+            }
+        },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                com.example.ui.settings.CertificateRecommenderView(
+                    viewModel = viewModel,
+                    primaryColor = primaryColor
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Entendido / Fechar", fontWeight = FontWeight.Bold)
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
     )
 }
