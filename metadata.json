@@ -1,6 +1,6 @@
 {
-  "name": "DevFolio Pro",
-  "description": "Portfólio profissional dinâmico para desenvolvedores e profissionais de infraestrutura de TI, com tema customizável e seções reordenáveis.",
+  "name": "FolioHub",
+  "description": "Portfólio profissional dinâmico e inteligente para criação de currículos e gestão de carreira, com tema customizável e recursos de IA.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

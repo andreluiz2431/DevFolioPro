@@ -103,7 +103,7 @@ fun OnboardingDialog(
                         )
                     }
                     Text(
-                        text = "Boas-vindas ao DevFolio Pro! ✨",
+                        text = "Boas-vindas ao FolioHub! ✨",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface,

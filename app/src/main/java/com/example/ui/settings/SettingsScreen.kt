@@ -1418,12 +1418,38 @@ fun SkillsSettings(
 ) {
     val context = LocalContext.current
     var newSkillName by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("Desenvolvimento") } // "Desenvolvimento" or "Infraestrutura"
 
-    val defaultCategories = remember { listOf("Desenvolvimento", "Infraestrutura", "Banco de Dados", "DevOps", "Design UX/UI") }
-    val suggestedCategories = remember(skills) {
-        val custom = skills.map { it.category }.distinct().filter { it.isNotBlank() }
-        (custom + defaultCategories).distinct()
+    val defaultPool = remember {
+        listOf(
+            "Desenvolvimento",
+            "Frameworks & Libs",
+            "Bancos de Dados",
+            "DevOps & Cloud",
+            "Design UX/UI",
+            "Infraestrutura",
+            "Ferramentas & Outros"
+        )
+    }
+
+    val existingCategories = remember(skills) {
+        skills
+            .map { it.category.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+    }
+
+    val newCategorySuggestions = remember(skills) {
+        defaultPool
+            .filter { defaultCat ->
+                existingCategories.none { existing -> existing.equals(defaultCat.trim(), ignoreCase = true) }
+            }
+            .take(2)
+    }
+
+    var selectedCategory by remember {
+        mutableStateOf(
+            existingCategories.firstOrNull() ?: newCategorySuggestions.firstOrNull() ?: "Desenvolvimento"
+        )
     }
 
     val categoriesList = remember(skills) {
@@ -1449,18 +1475,42 @@ fun SkillsSettings(
             singleLine = true
         )
 
-        if (suggestedCategories.isNotEmpty()) {
+        if (existingCategories.isNotEmpty()) {
             Text(
-                text = "Sugestões de Categorias (clique para selecionar):",
+                text = "Categorias já criadas:",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold
             )
             com.example.ui.home.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                suggestedCategories.forEach { cat ->
+                existingCategories.forEach { cat ->
+                    CategorySuggestionChip(
+                        text = cat,
+                        isSelected = selectedCategory.trim().equals(cat.trim(), ignoreCase = true),
+                        onClick = { selectedCategory = cat },
+                        primaryColor = primaryColor
+                    )
+                }
+            }
+        }
+
+        if (newCategorySuggestions.isNotEmpty()) {
+            Text(
+                text = "Sugestões de novas categorias (máx. 2):",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold
+            )
+            com.example.ui.home.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                newCategorySuggestions.forEach { cat ->
                     CategorySuggestionChip(
                         text = cat,
                         isSelected = selectedCategory.trim().equals(cat.trim(), ignoreCase = true),

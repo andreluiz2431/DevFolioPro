@@ -22,7 +22,7 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "devfolio-pro"
+rootProject.name = "FolioHub"
 
 include(":app")
 include(":shared")

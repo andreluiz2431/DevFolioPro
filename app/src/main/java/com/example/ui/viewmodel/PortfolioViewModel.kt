@@ -391,6 +391,51 @@ class PortfolioViewModel(
         }
     }
 
+    // Edit Mode Snapshot & Revert Operations
+    private var editModeSnapshot: CurriculumSnapshot? = null
+
+    fun startEditModeSnapshot() {
+        editModeSnapshot = CurriculumSnapshot(
+            profile = profile.value,
+            skills = skills.value.map { it.copy() },
+            experiences = experiences.value.map { it.copy() },
+            certificates = certificates.value.map { it.copy() },
+            sectionOrders = sectionOrders.value.map { it.copy() }
+        )
+    }
+
+    fun cancelEditModeAndRevert(onReverted: () -> Unit = {}) {
+        val snapshot = editModeSnapshot ?: run {
+            onReverted()
+            return
+        }
+        viewModelScope.launch {
+            try {
+                repository.saveProfile(snapshot.profile)
+
+                repository.clearAllSkills()
+                repository.insertSkills(snapshot.skills)
+
+                repository.clearAllExperiences()
+                repository.insertExperiences(snapshot.experiences)
+
+                repository.clearAllCertificates()
+                snapshot.certificates.forEach { repository.insertCertificate(it) }
+
+                repository.saveSectionOrders(snapshot.sectionOrders)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                editModeSnapshot = null
+                onReverted()
+            }
+        }
+    }
+
+    fun commitEditModeSnapshot() {
+        editModeSnapshot = null
+    }
+
     // LinkedIn Import State
     private val _linkedinImportState = MutableStateFlow<LinkedInImportUiState>(LinkedInImportUiState.Idle)
     val linkedinImportState: StateFlow<LinkedInImportUiState> = _linkedinImportState.asStateFlow()
@@ -463,6 +508,72 @@ class PortfolioViewModel(
             } catch (e: Exception) {
                 _linkedinImportState.value = LinkedInImportUiState.Error(
                     e.localizedMessage ?: "Erro ao processar importação."
+                )
+            }
+        }
+    }
+
+    fun importPdfData(context: android.content.Context, pdfUri: android.net.Uri, replaceExisting: Boolean) {
+        viewModelScope.launch {
+            _linkedinImportState.value = LinkedInImportUiState.Loading
+            try {
+                val imported = repository.importFromPdf(context, pdfUri)
+                if (imported != null) {
+                    imported.profile?.let { ip ->
+                        val current = profile.value
+                        repository.saveProfile(
+                            current.copy(
+                                name = ip.name ?: current.name,
+                                role = ip.role ?: current.role,
+                                bio = ip.bio ?: current.bio,
+                                email = ip.email ?: current.email,
+                                phone = ip.phone ?: current.phone,
+                                location = ip.location ?: current.location
+                            )
+                        )
+                    }
+
+                    if (replaceExisting) {
+                        repository.clearAllSkills()
+                    }
+                    imported.skills?.mapNotNull { skill ->
+                        if (!skill.name.isNullOrBlank()) {
+                            val cat = if (!skill.category.isNullOrBlank()) skill.category else "Desenvolvimento"
+                            SkillEntity(name = skill.name, category = cat)
+                        } else null
+                    }?.let { skillsToInsert ->
+                        if (skillsToInsert.isNotEmpty()) {
+                            repository.insertSkills(skillsToInsert)
+                        }
+                    }
+
+                    if (replaceExisting) {
+                        repository.clearAllExperiences()
+                    }
+                    var order = if (replaceExisting) 1 else (experiences.value.maxOfOrNull { it.displayOrder } ?: 0) + 1
+                    imported.experiences?.mapNotNull { exp ->
+                        if (!exp.role.isNullOrBlank() && !exp.company.isNullOrBlank()) {
+                            ExperienceEntity(
+                                company = exp.company,
+                                role = exp.role,
+                                period = exp.period ?: "",
+                                description = exp.description ?: "",
+                                displayOrder = order++
+                            )
+                        } else null
+                    }?.let { experiencesToInsert ->
+                        if (experiencesToInsert.isNotEmpty()) {
+                            repository.insertExperiences(experiencesToInsert)
+                        }
+                    }
+
+                    _linkedinImportState.value = LinkedInImportUiState.Success("Currículo em PDF importado com sucesso!")
+                } else {
+                    _linkedinImportState.value = LinkedInImportUiState.Error("Não foi possível analisar o conteúdo do arquivo PDF.")
+                }
+            } catch (e: Exception) {
+                _linkedinImportState.value = LinkedInImportUiState.Error(
+                    e.localizedMessage ?: "Erro ao processar o arquivo PDF."
                 )
             }
         }
@@ -1116,3 +1227,11 @@ class PortfolioViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
+data class CurriculumSnapshot(
+    val profile: ProfileEntity,
+    val skills: List<SkillEntity>,
+    val experiences: List<ExperienceEntity>,
+    val certificates: List<CertificateEntity>,
+    val sectionOrders: List<SectionOrderEntity>
+)

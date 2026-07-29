@@ -324,6 +324,64 @@ object ExportUtils {
         saveAndShareFile(context, htmlContent, "Portfolio_${profile.name.replace(" ", "_")}.html", "text/html")
     }
 
+    /**
+     * Exports the portfolio data as a structured JSON backup file.
+     */
+    fun exportToJson(
+        context: Context,
+        profile: ProfileEntity,
+        skills: List<SkillEntity>,
+        experiences: List<ExperienceEntity>,
+        certificates: List<com.example.data.local.entities.CertificateEntity> = emptyList()
+    ) {
+        val jsonObject = org.json.JSONObject().apply {
+            put("profile", org.json.JSONObject().apply {
+                put("name", profile.name)
+                put("role", profile.role)
+                put("bio", profile.bio)
+                put("email", profile.email)
+                put("phone", profile.phone)
+                put("location", profile.location)
+                put("githubUsername", profile.githubUsername)
+                put("linkedinUrl", profile.linkedinUrl)
+            })
+            put("skills", org.json.JSONArray().apply {
+                skills.forEach { s ->
+                    put(org.json.JSONObject().apply {
+                        put("name", s.name)
+                        put("category", s.category)
+                    })
+                }
+            })
+            put("experiences", org.json.JSONArray().apply {
+                experiences.forEach { e ->
+                    put(org.json.JSONObject().apply {
+                        put("company", e.company)
+                        put("role", e.role)
+                        put("period", e.period)
+                        put("description", e.description)
+                    })
+                }
+            })
+            put("certificates", org.json.JSONArray().apply {
+                certificates.forEach { c ->
+                    put(org.json.JSONObject().apply {
+                        put("title", c.title)
+                        put("date", c.date)
+                        put("attachmentPath", c.attachmentPath ?: "")
+                    })
+                }
+            })
+        }
+
+        saveAndShareFile(
+            context,
+            jsonObject.toString(2),
+            "Backup_Curriculo_${profile.name.replace(" ", "_")}.json",
+            "application/json"
+        )
+    }
+
     private fun saveAndShareFile(context: Context, pdfDocument: PdfDocument, filename: String, mimeType: String) {
         try {
             val contentResolver = context.contentResolver

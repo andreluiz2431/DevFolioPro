@@ -260,6 +260,121 @@ class PortfolioRepository(
         return adapter.fromJson(jsonText)
     }
 
+    suspend fun importFromPdf(context: android.content.Context, pdfUri: android.net.Uri): ImportedLinkedInPortfolio? {
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            throw IllegalStateException("Chave API do Gemini não configurada.")
+        }
+
+        val inputStream = context.contentResolver.openInputStream(pdfUri)
+            ?: throw IllegalArgumentException("Não foi possível abrir o arquivo PDF.")
+        val pdfBytes = inputStream.use { it.readBytes() }
+        if (pdfBytes.isEmpty()) {
+            throw IllegalArgumentException("O arquivo PDF selecionado está vazio.")
+        }
+
+        val base64Pdf = android.util.Base64.encodeToString(pdfBytes, android.util.Base64.NO_WRAP)
+
+        val prompt = """
+            Você é um assistente de IA especialista em recrutamento e análise de currículos profissionais.
+            Sua tarefa é analisar este arquivo PDF contendo um currículo profissional e extrair e mapear todas as informações estritamente para o seguinte formato JSON:
+
+            {
+              "profile": {
+                "name": "Nome Completo",
+                "role": "Cargo atual / Título profissional",
+                "bio": "Uma descrição profissional resumida do perfil ou resumo de qualificações extraído do currículo",
+                "email": "E-mail de contato",
+                "phone": "Telefone de contato",
+                "location": "Localização (ex: Cidade - Estado, Brasil)"
+              },
+              "skills": [
+                {
+                  "name": "Nome da Habilidade/Tecnologia",
+                  "category": "Desenvolvimento" ou "Infraestrutura"
+                }
+              ],
+              "experiences": [
+                {
+                  "company": "Nome da Empresa",
+                  "role": "Cargo ocupado",
+                  "period": "Período (ex: Jan 2020 - Presente)",
+                  "description": "Resumo das responsabilidades, conquistas e atividades desenvolvidas"
+                }
+              ]
+            }
+
+            Regras de Mapeamento:
+            1. Categorize as habilidades em "Desenvolvimento" (programação, linguagens, bancos de dados, frontend/backend/mobile) ou "Infraestrutura" (servidores, redes, DevOps, cloud, suporte, segurança).
+            2. Responda APENAS com o JSON válido. Não inclua texto adicional fora do JSON.
+        """.trimIndent()
+
+        val request = GeminiContentRequest(
+            contents = listOf(
+                GeminiContent(
+                    parts = listOf(
+                        GeminiPart(text = prompt),
+                        GeminiPart(inlineData = InlineData(mimeType = "application/pdf", data = base64Pdf))
+                    )
+                )
+            ),
+            generationConfig = GeminiGenerationConfig(
+                responseMimeType = "application/json",
+                temperature = 0.2f
+            )
+        )
+
+        val response = try {
+            geminiApiService.generateContent(apiKey, request)
+        } catch (e: Exception) {
+            val renderedParts = mutableListOf<GeminiPart>()
+            renderedParts.add(GeminiPart(text = prompt))
+            
+            try {
+                val pfd = context.contentResolver.openFileDescriptor(pdfUri, "r")
+                if (pfd != null) {
+                    val pdfRenderer = android.graphics.pdf.PdfRenderer(pfd)
+                    val pageCount = minOf(pdfRenderer.pageCount, 4)
+                    for (i in 0 until pageCount) {
+                        val page = pdfRenderer.openPage(i)
+                        val bitmap = android.graphics.Bitmap.createBitmap(
+                            page.width * 2, page.height * 2, android.graphics.Bitmap.Config.ARGB_8888
+                        )
+                        page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        page.close()
+
+                        val baos = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
+                        val jpegBase64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                        renderedParts.add(GeminiPart(inlineData = InlineData(mimeType = "image/jpeg", data = jpegBase64)))
+                    }
+                    pdfRenderer.close()
+                    pfd.close()
+                }
+            } catch (fallbackEx: Exception) {
+                throw e
+            }
+
+            val fallbackRequest = GeminiContentRequest(
+                contents = listOf(GeminiContent(parts = renderedParts)),
+                generationConfig = GeminiGenerationConfig(
+                    responseMimeType = "application/json",
+                    temperature = 0.2f
+                )
+            )
+            geminiApiService.generateContent(apiKey, fallbackRequest)
+        }
+
+        val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+            ?: return null
+
+        val moshi = Moshi.Builder()
+            .addLast(KotlinJsonAdapterFactory())
+            .build()
+        val adapter = moshi.adapter(ImportedLinkedInPortfolio::class.java)
+        return adapter.fromJson(jsonText)
+    }
+
     suspend fun suggestResumeImprovements(
         targetRole: String,
         profile: ProfileEntity,
