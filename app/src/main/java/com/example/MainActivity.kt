@@ -110,6 +110,18 @@ class MainActivity : ComponentActivity() {
                 var selectedTab by remember { mutableStateOf(0) }
                 val primaryColor = themeSettings.primaryColorHex.toColor()
 
+                androidx.activity.compose.BackHandler(enabled = showSimulatedLogin || showProfileDialog || showOnboardingDialog || selectedTab != 0) {
+                    if (showSimulatedLogin) {
+                        showSimulatedLogin = false
+                    } else if (showProfileDialog) {
+                        showProfileDialog = false
+                    } else if (showOnboardingDialog) {
+                        showOnboardingDialog = false
+                    } else if (selectedTab != 0) {
+                        selectedTab = 0
+                    }
+                }
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {

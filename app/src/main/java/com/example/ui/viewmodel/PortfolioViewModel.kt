@@ -315,6 +315,16 @@ class PortfolioViewModel(
         }
     }
 
+    fun updateSkillCategory(oldCategory: String, newCategory: String) {
+        viewModelScope.launch {
+            if (oldCategory.isBlank() || newCategory.isBlank()) return@launch
+            val currentSkills = skills.value
+            currentSkills.filter { it.category.equals(oldCategory, ignoreCase = true) }.forEach { skill ->
+                repository.insertSkill(skill.copy(category = newCategory.trim()))
+            }
+        }
+    }
+
     fun removeSkill(id: Int) {
         viewModelScope.launch {
             repository.deleteSkill(id)

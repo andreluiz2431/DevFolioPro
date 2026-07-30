@@ -173,6 +173,10 @@ fun SettingsScreen(
 
     var currentCategory by remember { mutableStateOf<SettingsCategory?>(null) }
 
+    androidx.activity.compose.BackHandler(enabled = currentCategory != null) {
+        currentCategory = null
+    }
+
     // Render Checkout WebView Dialog if needed at root level so it's accessible across all tabs
     if (checkoutUrl != null) {
         Dialog(
@@ -1382,7 +1386,8 @@ fun CategorySuggestionChip(
     text: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    primaryColor: Color
+    primaryColor: Color,
+    onEditClick: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
@@ -1397,15 +1402,30 @@ fun CategorySuggestionChip(
                 shape = RoundedCornerShape(8.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             )
-        )
+            if (onEditClick != null) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Editar Categoria",
+                    tint = if (isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clickable { onEditClick() }
+                )
+            }
+        }
     }
 }
 
@@ -1418,6 +1438,21 @@ fun SkillsSettings(
 ) {
     val context = LocalContext.current
     var newSkillName by remember { mutableStateOf("") }
+    var categoryToEditBySettings by remember { mutableStateOf<String?>(null) }
+
+    if (categoryToEditBySettings != null) {
+        com.example.ui.home.InlineEditCategoryDialog(
+            currentCategoryName = categoryToEditBySettings!!,
+            onDismiss = { categoryToEditBySettings = null },
+            onSave = { newName ->
+                val old = categoryToEditBySettings!!
+                categoryToEditBySettings = null
+                viewModel.updateSkillCategory(old, newName)
+                Toast.makeText(context, "Categoria atualizada para $newName", Toast.LENGTH_SHORT).show()
+            },
+            primaryColor = primaryColor
+        )
+    }
 
     val defaultPool = remember {
         listOf(
@@ -1477,7 +1512,7 @@ fun SkillsSettings(
 
         if (existingCategories.isNotEmpty()) {
             Text(
-                text = "Categorias já criadas:",
+                text = "Categorias já criadas (clique no lápis para editar):",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Bold
@@ -1492,7 +1527,8 @@ fun SkillsSettings(
                         text = cat,
                         isSelected = selectedCategory.trim().equals(cat.trim(), ignoreCase = true),
                         onClick = { selectedCategory = cat },
-                        primaryColor = primaryColor
+                        primaryColor = primaryColor,
+                        onEditClick = { categoryToEditBySettings = cat }
                     )
                 }
             }
@@ -1698,6 +1734,7 @@ fun ExportOptionsSettings(
     profile: ProfileEntity,
     skills: List<SkillEntity>,
     experiences: List<ExperienceEntity>,
+    certificates: List<com.example.data.local.entities.CertificateEntity> = emptyList(),
     themeSettings: com.example.data.local.entities.ThemeSettingsEntity,
     primaryColor: Color
 ) {
@@ -1813,6 +1850,110 @@ fun ExportOptionsSettings(
                 )
             }
         }
+
+        // Option 3: Backup JSON
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        com.example.utils.ExportUtils.exportToJson(context, profile, skills, experiences, certificates)
+                    }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DataObject,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Backup de Dados (JSON)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Estrutura completa de dados para cópia de segurança e restauração.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Baixar JSON",
+                    tint = primaryColor
+                )
+            }
+        }
+
+        // Option 4: Planilha CSV
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        com.example.utils.ExportUtils.exportToCsv(context, profile, skills, experiences, certificates)
+                    }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TableChart,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Planilha de Dados (CSV)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Exportação de dados tabulares compatível com Excel e Google Planilhas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Baixar CSV",
+                    tint = primaryColor
+                )
+            }
+        }
     }
 }
 
@@ -1822,9 +1963,34 @@ fun LinkedInImportSettings(
     primaryColor: Color
 ) {
     val importState by viewModel.linkedinImportState.collectAsState()
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    var selectedPdfUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedPdfName by remember { mutableStateOf("") }
     var rawText by remember { mutableStateOf("") }
     var replaceExisting by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    val pdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedPdfUri = uri
+            var name = "Curriculo.pdf"
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            name = cursor.getString(nameIndex)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            selectedPdfName = name
+        }
+    }
 
     LaunchedEffect(importState) {
         if (importState is LinkedInImportUiState.Success) {
@@ -1839,29 +2005,75 @@ fun LinkedInImportSettings(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Copie o texto completo do seu perfil do LinkedIn (sobre, experiências, competências) ou o texto de um currículo PDF e cole abaixo. A Inteligência Artificial (Gemini) irá estruturar automaticamente suas informações.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        OutlinedTextField(
-            value = rawText,
-            onValueChange = { rawText = it },
-            label = { Text("Texto do LinkedIn / Currículo") },
-            placeholder = { Text("Cole aqui o texto copiado...") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .testTag("linkedin_import_input"),
-            maxLines = 15,
-            enabled = importState !is LinkedInImportUiState.Loading,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = primaryColor,
-                focusedLabelColor = primaryColor
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            containerColor = Color.Transparent,
+            contentColor = primaryColor
+        ) {
+            Tab(
+                selected = selectedTabIndex == 0,
+                onClick = { selectedTabIndex = 0 },
+                text = { Text("📁 Arquivo PDF", fontWeight = FontWeight.Bold) }
             )
-        )
+            Tab(
+                selected = selectedTabIndex == 1,
+                onClick = { selectedTabIndex = 1 },
+                text = { Text("📝 Copiar Texto", fontWeight = FontWeight.Bold) }
+            )
+        }
+
+        if (selectedTabIndex == 0) {
+            // PDF Import View
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Selecione um arquivo de currículo em PDF para extrair nome, cargo, biografia, habilidades e experiências automaticamente com a Gemini IA.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedButton(
+                    onClick = { pdfLauncher.launch("application/pdf") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = primaryColor)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (selectedPdfName.isNotBlank()) selectedPdfName else "Escolher Arquivo PDF",
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        } else {
+            // Text Import View
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Copie o texto completo do seu perfil do LinkedIn (sobre, experiências, competências) ou o texto de um currículo e cole abaixo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = rawText,
+                    onValueChange = { rawText = it },
+                    label = { Text("Texto do LinkedIn / Currículo") },
+                    placeholder = { Text("Cole aqui o texto copiado...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .testTag("linkedin_import_input"),
+                    maxLines = 15,
+                    enabled = importState !is LinkedInImportUiState.Loading,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = primaryColor,
+                        focusedLabelColor = primaryColor
+                    )
+                )
+            }
+        }
 
         // Switch to choose Replace vs Merge
         Surface(
@@ -1916,7 +2128,7 @@ fun LinkedInImportSettings(
                     ) {
                         CircularProgressIndicator(color = primaryColor)
                         Text(
-                            text = "Analisando dados com Gemini AI...",
+                            text = if (selectedTabIndex == 0) "Lendo PDF e extraindo com Gemini IA..." else "Analisando dados com Gemini AI...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = primaryColor,
                             fontWeight = FontWeight.SemiBold
@@ -1999,10 +2211,16 @@ fun LinkedInImportSettings(
             else -> {
                 Button(
                     onClick = {
-                        if (rawText.isNotBlank()) {
-                            viewModel.importLinkedInData(rawText, replaceExisting)
+                        if (selectedTabIndex == 0) {
+                            selectedPdfUri?.let { uri ->
+                                viewModel.importPdfData(context, uri, replaceExisting)
+                            } ?: Toast.makeText(context, "Selecione um arquivo PDF primeiro.", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Por favor, cole algum texto antes de importar.", Toast.LENGTH_SHORT).show()
+                            if (rawText.isNotBlank()) {
+                                viewModel.importLinkedInData(rawText, replaceExisting)
+                            } else {
+                                Toast.makeText(context, "Por favor, cole algum texto antes de importar.", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     modifier = Modifier
@@ -2011,14 +2229,17 @@ fun LinkedInImportSettings(
                         .testTag("linkedin_import_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                     shape = RoundedCornerShape(12.dp),
-                    enabled = rawText.isNotBlank()
+                    enabled = if (selectedTabIndex == 0) selectedPdfUri != null else rawText.isNotBlank()
                 ) {
                     Icon(
                         imageVector = Icons.Default.SmartToy,
                         contentDescription = null
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Importar com Gemini AI", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (selectedTabIndex == 0) "Analisar PDF com IA" else "Importar com Gemini AI",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

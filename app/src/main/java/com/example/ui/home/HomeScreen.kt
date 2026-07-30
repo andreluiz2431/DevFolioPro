@@ -208,7 +208,8 @@ fun HomeScreen(
                                     secondaryColor = secondaryColor,
                                     isEditMode = isEditMode,
                                     onAddSkill = { showAddSkillDialog = true },
-                                    onRemoveSkill = { id -> viewModel.removeSkill(id) }
+                                    onRemoveSkill = { id -> viewModel.removeSkill(id) },
+                                    onEditCategory = { oldCat, newCat -> viewModel.updateSkillCategory(oldCat, newCat) }
                                 )
                             }
                         }
@@ -917,19 +918,92 @@ fun AboutSection(
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
+fun InlineEditCategoryDialog(
+    currentCategoryName: String,
+    onDismiss: () -> Unit,
+    onSave: (newName: String) -> Unit,
+    primaryColor: Color
+) {
+    var categoryName by remember { mutableStateOf(currentCategoryName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Edit, contentDescription = null, tint = primaryColor)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Editar Categoria", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Altere o nome da categoria para todas as habilidades vinculadas:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = categoryName,
+                    onValueChange = { categoryName = it },
+                    label = { Text("Nome da Categoria") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (categoryName.isNotBlank()) {
+                        onSave(categoryName.trim())
+                    }
+                },
+                enabled = categoryName.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
 fun SkillsSection(
     skills: List<SkillEntity>,
     primaryColor: Color,
     secondaryColor: Color,
     isEditMode: Boolean = false,
     onAddSkill: () -> Unit = {},
-    onRemoveSkill: (Int) -> Unit = {}
+    onRemoveSkill: (Int) -> Unit = {},
+    onEditCategory: (oldCat: String, newCat: String) -> Unit = { _, _ -> }
 ) {
+    var categoryToEdit by remember { mutableStateOf<String?>(null) }
     val skillsByCategory = remember(skills) {
         skills.groupBy { it.category }
     }
     val categories = remember(skillsByCategory) {
         skillsByCategory.keys.toList()
+    }
+
+    if (categoryToEdit != null) {
+        InlineEditCategoryDialog(
+            currentCategoryName = categoryToEdit!!,
+            onDismiss = { categoryToEdit = null },
+            onSave = { newName ->
+                val old = categoryToEdit!!
+                categoryToEdit = null
+                onEditCategory(old, newName)
+            },
+            primaryColor = primaryColor
+        )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -956,14 +1030,32 @@ fun SkillsSection(
                     else -> MaterialTheme.colorScheme.tertiary
                 }
                 Column {
-                    Text(
-                        text = category.uppercase(),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = badgeColor
-                        ),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                    ) {
+                        Text(
+                            text = category.uppercase(),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor
+                            )
+                        )
+                        if (isEditMode) {
+                            IconButton(
+                                onClick = { categoryToEdit = category },
+                                modifier = Modifier.size(22.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Editar categoria $category",
+                                    tint = badgeColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2565,6 +2657,48 @@ fun ExportOptionsDialog(
                             )
                             Text(
                                 text = "Estrutura completa de dados para cópia de segurança.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(Icons.Default.Download, contentDescription = "Baixar", tint = primaryColor)
+                    }
+                }
+
+                // Option 4: CSV Table
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onDismiss()
+                            ExportUtils.exportToCsv(context, profile, skills, experiences, certificates)
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = primaryColor.copy(alpha = 0.08f)
+                    ),
+                    border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.2f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TableChart,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Planilha de Dados (CSV)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Exportação de dados tabulares compatível com Excel e Google Planilhas.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

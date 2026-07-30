@@ -165,18 +165,28 @@ object ExportUtils {
         }
 
         // Section: Social & Professional Links
-        if (yPosition > 750f) {
-            pdfDocument.finishPage(page)
-            page = pdfDocument.startPage(pageInfo)
-            canvas = page.canvas
-            yPosition = 50f
+        val hasLinkedin = profile.linkedinUrl.isNotBlank()
+        val hasGithub = profile.githubUsername.isNotBlank()
+        if (hasLinkedin || hasGithub) {
+            if (yPosition > 750f) {
+                pdfDocument.finishPage(page)
+                page = pdfDocument.startPage(pageInfo)
+                canvas = page.canvas
+                yPosition = 50f
+            }
+            yPosition += 10f
+            canvas.drawText("LINKS E PORTFÓLIO", leftMargin, yPosition, paintHeading)
+            yPosition += 16f
+            if (hasLinkedin) {
+                canvas.drawText("LinkedIn: ${profile.linkedinUrl.trim()}", leftMargin, yPosition, paintNormal)
+                yPosition += 14f
+            }
+            if (hasGithub) {
+                val githubLink = if (profile.githubUsername.trim().startsWith("http")) profile.githubUsername.trim() else "https://github.com/${profile.githubUsername.trim()}"
+                canvas.drawText("GitHub: $githubLink", leftMargin, yPosition, paintNormal)
+                yPosition += 14f
+            }
         }
-        yPosition += 10f
-        canvas.drawText("LINKS E PORTFÓLIO", leftMargin, yPosition, paintHeading)
-        yPosition += 16f
-        canvas.drawText("LinkedIn: ${profile.linkedinUrl}", leftMargin, yPosition, paintNormal)
-        yPosition += 14f
-        canvas.drawText("GitHub: https://github.com/${profile.githubUsername}", leftMargin, yPosition, paintNormal)
 
         pdfDocument.finishPage(page)
 
@@ -272,12 +282,16 @@ object ExportUtils {
                         </div>
                       </div>
                       <div class="flex flex-wrap gap-3 justify-center md:justify-start">
-                        <a href="${profile.linkedinUrl}" target="_blank" class="px-6 py-3 bg-white text-gray-900 font-bold rounded-xl shadow-md hover:bg-gray-50 transition flex items-center gap-2">
-                          LinkedIn
-                        </a>
-                        <a href="https://github.com/${profile.githubUsername}" target="_blank" class="px-6 py-3 bg-black/20 border border-white/30 text-white font-bold rounded-xl hover:bg-white/10 transition flex items-center gap-2">
-                          GitHub
-                        </a>
+                        ${if (profile.linkedinUrl.isNotBlank()) """
+                          <a href="${profile.linkedinUrl.trim()}" target="_blank" class="px-6 py-3 bg-white text-gray-900 font-bold rounded-xl shadow-md hover:bg-gray-50 transition flex items-center gap-2">
+                            LinkedIn
+                          </a>
+                        """.trimIndent() else ""}
+                        ${if (profile.githubUsername.isNotBlank()) """
+                          <a href="${if (profile.githubUsername.trim().startsWith("http")) profile.githubUsername.trim() else "https://github.com/${profile.githubUsername.trim()}"}" target="_blank" class="px-6 py-3 bg-black/20 border border-white/30 text-white font-bold rounded-xl hover:bg-white/10 transition flex items-center gap-2">
+                            GitHub
+                          </a>
+                        """.trimIndent() else ""}
                       </div>
                     </div>
                   </header>
@@ -379,6 +393,46 @@ object ExportUtils {
             jsonObject.toString(2),
             "Backup_Curriculo_${profile.name.replace(" ", "_")}.json",
             "application/json"
+        )
+    }
+
+    /**
+     * Exports the portfolio data as a tabular CSV file compatible with Excel / Google Sheets.
+     */
+    fun exportToCsv(
+        context: Context,
+        profile: ProfileEntity,
+        skills: List<SkillEntity>,
+        experiences: List<ExperienceEntity>,
+        certificates: List<com.example.data.local.entities.CertificateEntity> = emptyList()
+    ) {
+        val csv = StringBuilder()
+        csv.append("TIPO,NOME/TITULO,CATEGORIA/EMPRESA,DESCRICAO,PERIODO/LINK\n")
+        csv.append("\"PERFIL\",\"${profile.name.replace("\"", "\"\"")}\",\"${profile.role.replace("\"", "\"\"")}\",\"${profile.bio.replace("\"", "\"\"")}\",\"Email: ${profile.email}, Tel: ${profile.phone}, Local: ${profile.location}\"\n")
+
+        if (profile.linkedinUrl.isNotBlank()) {
+            csv.append("\"LINK\",\"LinkedIn\",\"Redes Sociais\",\"Link de Perfil Professional\",\"${profile.linkedinUrl.trim()}\"\n")
+        }
+        if (profile.githubUsername.isNotBlank()) {
+            val githubLink = if (profile.githubUsername.trim().startsWith("http")) profile.githubUsername.trim() else "https://github.com/${profile.githubUsername.trim()}"
+            csv.append("\"LINK\",\"GitHub\",\"Redes Sociais\",\"Repositórios de Código\",\"$githubLink\"\n")
+        }
+
+        skills.forEach { s ->
+            csv.append("\"HABILIDADE\",\"${s.name.replace("\"", "\"\"")}\",\"${s.category.replace("\"", "\"\"")}\",\"\",\"\"\n")
+        }
+        experiences.forEach { e ->
+            csv.append("\"EXPERIENCIA\",\"${e.role.replace("\"", "\"\"")}\",\"${e.company.replace("\"", "\"\"")}\",\"${e.description.replace("\"", "\"\"")}\",\"${e.period.replace("\"", "\"\"")}\"\n")
+        }
+        certificates.forEach { c ->
+            csv.append("\"CERTIFICADO\",\"${c.title.replace("\"", "\"\"")}\",\"Certificação/Curso\",\"${c.date}\",\"${c.attachmentPath ?: ""}\"\n")
+        }
+
+        saveAndShareFile(
+            context,
+            csv.toString(),
+            "Portfolio_${profile.name.replace(" ", "_")}.csv",
+            "text/csv"
         )
     }
 
