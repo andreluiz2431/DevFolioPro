@@ -45,6 +45,17 @@ data class ExperienceEntity(
     val displayOrder: Int
 )
 
+@Entity(tableName = "education")
+data class EducationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val institution: String,
+    val degree: String,
+    val fieldOfStudy: String = "",
+    val period: String,
+    val description: String = "",
+    val displayOrder: Int = 0
+)
+
 @Entity(tableName = "certificates")
 data class CertificateEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,

@@ -124,6 +124,14 @@ class PortfolioViewModel(
             initialValue = emptyList()
         )
 
+    // Educations (Academic Experience)
+    val educations: StateFlow<List<EducationEntity>> = repository.getEducations()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Section Order
     val sectionOrders: StateFlow<List<SectionOrderEntity>> = repository.getSectionOrders()
         .stateIn(
@@ -372,6 +380,35 @@ class PortfolioViewModel(
         }
     }
 
+    // Education (Academic Experience) Operations
+    fun addEducation(institution: String, degree: String, fieldOfStudy: String = "", period: String, description: String = "") {
+        viewModelScope.launch {
+            val nextOrder = (educations.value.maxOfOrNull { it.displayOrder } ?: 0) + 1
+            repository.insertEducation(
+                EducationEntity(
+                    institution = institution,
+                    degree = degree,
+                    fieldOfStudy = fieldOfStudy,
+                    period = period,
+                    description = description,
+                    displayOrder = nextOrder
+                )
+            )
+        }
+    }
+
+    fun updateEducation(education: EducationEntity) {
+        viewModelScope.launch {
+            repository.insertEducation(education)
+        }
+    }
+
+    fun removeEducation(id: Int) {
+        viewModelScope.launch {
+            repository.deleteEducation(id)
+        }
+    }
+
     // Layout/Section Reordering Operations
     fun moveSectionUp(section: SectionOrderEntity) {
         viewModelScope.launch {
@@ -409,6 +446,7 @@ class PortfolioViewModel(
             profile = profile.value,
             skills = skills.value.map { it.copy() },
             experiences = experiences.value.map { it.copy() },
+            educations = educations.value.map { it.copy() },
             certificates = certificates.value.map { it.copy() },
             sectionOrders = sectionOrders.value.map { it.copy() }
         )
@@ -428,6 +466,9 @@ class PortfolioViewModel(
 
                 repository.clearAllExperiences()
                 repository.insertExperiences(snapshot.experiences)
+
+                repository.clearAllEducations()
+                repository.insertEducations(snapshot.educations)
 
                 repository.clearAllCertificates()
                 snapshot.certificates.forEach { repository.insertCertificate(it) }
@@ -511,6 +552,28 @@ class PortfolioViewModel(
                         }
                     }
 
+                    // Handle educations
+                    if (replaceExisting) {
+                        repository.clearAllEducations()
+                    }
+                    var eduOrder = if (replaceExisting) 1 else (educations.value.maxOfOrNull { it.displayOrder } ?: 0) + 1
+                    imported.educations?.mapNotNull { edu ->
+                        if (!edu.institution.isNullOrBlank() && !edu.degree.isNullOrBlank()) {
+                            EducationEntity(
+                                institution = edu.institution,
+                                degree = edu.degree,
+                                fieldOfStudy = edu.fieldOfStudy ?: "",
+                                period = edu.period ?: "",
+                                description = edu.description ?: "",
+                                displayOrder = eduOrder++
+                            )
+                        } else null
+                    }?.let { educationsToInsert ->
+                        if (educationsToInsert.isNotEmpty()) {
+                            repository.insertEducations(educationsToInsert)
+                        }
+                    }
+
                     _linkedinImportState.value = LinkedInImportUiState.Success("Dados importados com sucesso!")
                 } else {
                     _linkedinImportState.value = LinkedInImportUiState.Error("Não foi possível extrair os dados do texto fornecido.")
@@ -574,6 +637,28 @@ class PortfolioViewModel(
                     }?.let { experiencesToInsert ->
                         if (experiencesToInsert.isNotEmpty()) {
                             repository.insertExperiences(experiencesToInsert)
+                        }
+                    }
+
+                    // Handle educations
+                    if (replaceExisting) {
+                        repository.clearAllEducations()
+                    }
+                    var eduOrder = if (replaceExisting) 1 else (educations.value.maxOfOrNull { it.displayOrder } ?: 0) + 1
+                    imported.educations?.mapNotNull { edu ->
+                        if (!edu.institution.isNullOrBlank() && !edu.degree.isNullOrBlank()) {
+                            EducationEntity(
+                                institution = edu.institution,
+                                degree = edu.degree,
+                                fieldOfStudy = edu.fieldOfStudy ?: "",
+                                period = edu.period ?: "",
+                                description = edu.description ?: "",
+                                displayOrder = eduOrder++
+                            )
+                        } else null
+                    }?.let { educationsToInsert ->
+                        if (educationsToInsert.isNotEmpty()) {
+                            repository.insertEducations(educationsToInsert)
                         }
                     }
 
@@ -662,6 +747,7 @@ class PortfolioViewModel(
             try {
                 repository.clearAllSkills()
                 repository.clearAllExperiences()
+                repository.clearAllEducations()
                 repository.clearAllCertificates()
                 repository.saveProfile(
                     ProfileEntity(
@@ -701,6 +787,7 @@ class PortfolioViewModel(
                             profile = profile.value,
                             skills = skills.value,
                             experiences = experiences.value,
+                            educations = educations.value,
                             themeSettings = themeSettings.value,
                             sectionOrders = sectionOrders.value,
                             certificates = certificates.value
@@ -727,6 +814,7 @@ class PortfolioViewModel(
                                 profile = profile.value,
                                 skills = skills.value,
                                 experiences = experiences.value,
+                                educations = educations.value,
                                 themeSettings = themeSettings.value,
                                 sectionOrders = sectionOrders.value,
                                 certificates = certificates.value
@@ -743,6 +831,7 @@ class PortfolioViewModel(
                                 profile = profile.value,
                                 skills = skills.value,
                                 experiences = experiences.value,
+                                educations = educations.value,
                                 themeSettings = themeSettings.value,
                                 sectionOrders = sectionOrders.value,
                                 certificates = certificates.value
@@ -770,6 +859,10 @@ class PortfolioViewModel(
         // Apply experiences (clear first, then insert)
         repository.clearAllExperiences()
         data.experiences?.let { repository.insertExperiences(it) }
+
+        // Apply educations (clear first, then insert)
+        repository.clearAllEducations()
+        data.educations?.let { repository.insertEducations(it) }
 
         // Apply certificates (clear first, then insert)
         repository.clearAllCertificates()
@@ -806,6 +899,11 @@ class PortfolioViewModel(
         val mergedExperiences = (localExperiences + cloudExperiences).distinctBy { "${it.company.trim().lowercase()}_${it.role.trim().lowercase()}" }
             .mapIndexed { index, exp -> exp.copy(displayOrder = index + 1) }
 
+        val localEducations = local.educations ?: emptyList()
+        val cloudEducations = cloud.educations ?: emptyList()
+        val mergedEducations = (localEducations + cloudEducations).distinctBy { "${it.institution.trim().lowercase()}_${it.degree.trim().lowercase()}" }
+            .mapIndexed { index, edu -> edu.copy(displayOrder = index + 1) }
+
         val localCerts = local.certificates ?: emptyList()
         val cloudCerts = cloud.certificates ?: emptyList()
         val mergedCerts = (localCerts + cloudCerts).distinctBy { it.title.trim().lowercase() }
@@ -814,6 +912,7 @@ class PortfolioViewModel(
             profile = mergedProfile,
             skills = mergedSkills,
             experiences = mergedExperiences,
+            educations = mergedEducations,
             themeSettings = local.themeSettings ?: cloud.themeSettings,
             sectionOrders = local.sectionOrders ?: cloud.sectionOrders,
             certificates = mergedCerts
@@ -832,6 +931,7 @@ class PortfolioViewModel(
         val currentProfile = profile.value
         val currentSkills = skills.value
         val currentExperiences = experiences.value
+        val currentEducations = educations.value
         val githubRepos = when (val s = githubReposState.value) {
             is GithubReposUiState.Success -> s.repos
             else -> emptyList()
@@ -845,6 +945,7 @@ class PortfolioViewModel(
                     profile = currentProfile,
                     skills = currentSkills,
                     experiences = currentExperiences,
+                    educations = currentEducations,
                     repos = githubRepos,
                     jobDescription = jobDescription
                 )
@@ -1242,6 +1343,7 @@ data class CurriculumSnapshot(
     val profile: ProfileEntity,
     val skills: List<SkillEntity>,
     val experiences: List<ExperienceEntity>,
+    val educations: List<EducationEntity> = emptyList(),
     val certificates: List<CertificateEntity>,
     val sectionOrders: List<SectionOrderEntity>
 )

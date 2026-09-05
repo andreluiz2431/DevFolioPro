@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.entities.CertificateEntity
+import com.example.data.local.entities.EducationEntity
 import com.example.data.local.entities.ExperienceEntity
 import com.example.data.local.entities.ProfileEntity
 import com.example.data.local.entities.SectionOrderEntity
@@ -61,6 +62,7 @@ fun HomeScreen(
     val profile by viewModel.profile.collectAsState()
     val skills by viewModel.skills.collectAsState()
     val experiences by viewModel.experiences.collectAsState()
+    val educations by viewModel.educations.collectAsState()
     val certificates by viewModel.certificates.collectAsState()
     val sections by viewModel.sectionOrders.collectAsState()
     val githubReposState by viewModel.githubReposState.collectAsState()
@@ -79,6 +81,7 @@ fun HomeScreen(
     var showProfileEditDialog by remember { mutableStateOf(false) }
     var showAddSkillDialog by remember { mutableStateOf(false) }
     var showAddExperienceDialog by remember { mutableStateOf(false) }
+    var showAddEducationDialog by remember { mutableStateOf(false) }
     var showAddCertificateDialog by remember { mutableStateOf(false) }
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
     var showCourseSuggestionsDialog by remember { mutableStateOf(false) }
@@ -232,6 +235,28 @@ fun HomeScreen(
                                     isEditMode = isEditMode,
                                     onAddExperience = { showAddExperienceDialog = true },
                                     onRemoveExperience = { id -> viewModel.removeExperience(id) }
+                                )
+                            }
+                        }
+                    }
+                    "educacao" -> {
+                        item(key = "educacao") {
+                            SectionWrapper(
+                                title = section.title,
+                                icon = Icons.Default.School,
+                                primaryColor = primaryColor,
+                                isEditMode = isEditMode,
+                                isFirst = isFirst,
+                                isLast = isLast,
+                                onMoveUp = { viewModel.moveSectionUp(section) },
+                                onMoveDown = { viewModel.moveSectionDown(section) }
+                            ) {
+                                EducationSection(
+                                    educations = educations,
+                                    primaryColor = primaryColor,
+                                    isEditMode = isEditMode,
+                                    onAddEducation = { showAddEducationDialog = true },
+                                    onRemoveEducation = { id -> viewModel.removeEducation(id) }
                                 )
                             }
                         }
@@ -509,6 +534,16 @@ fun HomeScreen(
         )
     }
 
+    if (showAddEducationDialog) {
+        InlineAddEducationDialog(
+            onDismiss = { showAddEducationDialog = false },
+            onSave = { institution, degree, fieldOfStudy, period, description ->
+                viewModel.addEducation(institution, degree, fieldOfStudy, period, description)
+            },
+            primaryColor = primaryColor
+        )
+    }
+
     if (showAddCertificateDialog) {
         InlineAddCertificateDialog(
             onDismiss = { showAddCertificateDialog = false },
@@ -546,6 +581,7 @@ fun HomeScreen(
             profile = profile,
             skills = skills,
             experiences = experiences,
+            educations = educations,
             certificates = certificates,
             themeSettings = themeSettings,
             primaryColor = primaryColor
@@ -946,6 +982,7 @@ fun InlineEditCategoryDialog(
                     value = categoryName,
                     onValueChange = { categoryName = it },
                     label = { Text("Nome da Categoria") },
+                    placeholder = { Text("Ex: Atendimento, Vendas, Informática") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -1239,6 +1276,130 @@ fun ExperienceTimeline(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EducationSection(
+    educations: List<EducationEntity>,
+    primaryColor: Color,
+    isEditMode: Boolean = false,
+    onAddEducation: () -> Unit = {},
+    onRemoveEducation: (Int) -> Unit = {}
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (isEditMode) {
+            OutlinedButton(
+                onClick = onAddEducation,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .testTag("add_education_button")
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Adicionar Formação Acadêmica", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (educations.isEmpty() && !isEditMode) {
+            Text(
+                text = "Nenhuma formação acadêmica cadastrada ainda.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return
+        }
+
+        educations.forEachIndexed { index, edu ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+            ) {
+                // Timeline Line with School Node Circle
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.width(32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(primaryColor)
+                            .border(3.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    )
+                    if (index < educations.size - 1) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(2.dp)
+                                .drawBehind {
+                                    val size = this.size
+                                    var y = 0f
+                                    val interval = 10f
+                                    while (y < size.height) {
+                                        drawLine(
+                                            color = primaryColor.copy(alpha = 0.4f),
+                                            start = Offset(size.width / 2, y),
+                                            end = Offset(size.width / 2, y + 6f),
+                                            strokeWidth = 2.dp.toPx()
+                                        )
+                                        y += interval
+                                    }
+                                }
+                        )
+                    }
+                }
+
+                // Education details
+                Column(
+                    modifier = Modifier
+                        .padding(start = 12.dp, bottom = 24.dp)
+                        .weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${edu.degree}${if (edu.fieldOfStudy.isNotBlank()) " em ${edu.fieldOfStudy}" else ""}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isEditMode) {
+                            IconButton(
+                                onClick = { onRemoveEducation(edu.id) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Excluir formação",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = "${edu.institution} • ${edu.period}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = primaryColor
+                    )
+                    if (edu.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = edu.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -2090,7 +2251,7 @@ fun InlineAddSkillDialog(
                     value = category,
                     onValueChange = { category = it },
                     label = { Text("Categoria (digite nova ou selecione abaixo)") },
-                    placeholder = { Text("Ex: Inteligência Artificial") },
+                    placeholder = { Text("Ex: Atendimento, Vendas, Informática") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("inline_skill_category_input"),
@@ -2230,6 +2391,7 @@ fun InlineAddExperienceDialog(
                     value = company,
                     onValueChange = { company = it },
                     label = { Text("Empresa / Organização") },
+                    placeholder = { Text("Ex: Padaria Silva, Google ou Freelancer") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -2238,6 +2400,7 @@ fun InlineAddExperienceDialog(
                     value = role,
                     onValueChange = { role = it },
                     label = { Text("Cargo (ex: Desenvolvedor Senior)") },
+                    placeholder = { Text("Ex: Atendente, Vendedor ou Auxiliar") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -2246,6 +2409,7 @@ fun InlineAddExperienceDialog(
                     value = period,
                     onValueChange = { period = it },
                     label = { Text("Período (ex: 2022 - Presente)") },
+                    placeholder = { Text("Ex: Jan 2022 - Atual") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -2254,6 +2418,7 @@ fun InlineAddExperienceDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Descrição das Atividades / Conquistas") },
+                    placeholder = { Text("Ex: Atendimento ao cliente, controle de caixa e organização de estoque") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(110.dp),
@@ -2274,6 +2439,100 @@ fun InlineAddExperienceDialog(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Adicionar Experiência", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+fun InlineAddEducationDialog(
+    onDismiss: () -> Unit,
+    onSave: (institution: String, degree: String, fieldOfStudy: String, period: String, description: String) -> Unit,
+    primaryColor: Color
+) {
+    var institution by remember { mutableStateOf("") }
+    var degree by remember { mutableStateOf("") }
+    var fieldOfStudy by remember { mutableStateOf("") }
+    var period by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.School, contentDescription = null, tint = primaryColor)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Adicionar Formação Acadêmica", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = institution,
+                    onValueChange = { institution = it },
+                    label = { Text("Instituição de Ensino") },
+                    placeholder = { Text("Ex: Universidade de São Paulo (USP), ETEC ou Coursera") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = degree,
+                    onValueChange = { degree = it },
+                    label = { Text("Grau / Nível de Formação") },
+                    placeholder = { Text("Ex: Bacharelado, Técnico, Pós-Graduação ou Tecnólogo") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = fieldOfStudy,
+                    onValueChange = { fieldOfStudy = it },
+                    label = { Text("Curso / Área de Estudo") },
+                    placeholder = { Text("Ex: Ciência da Computação, Administração ou Enfermagem") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = period,
+                    onValueChange = { period = it },
+                    label = { Text("Período (ex: Jan 2020 - Dez 2024)") },
+                    placeholder = { Text("Ex: Jan 2020 - Dez 2024") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Descrição das Atividades Acadêmicas") },
+                    placeholder = { Text("Ex: TCC focado em IA, monitoria em programação e projetos de extensão") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (institution.isNotBlank() && degree.isNotBlank()) {
+                        onSave(institution.trim(), degree.trim(), fieldOfStudy.trim(), period.trim(), description.trim())
+                        onDismiss()
+                    }
+                },
+                enabled = institution.isNotBlank() && degree.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Adicionar Formação", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2455,7 +2714,7 @@ fun SaveCurriculumConfirmDialog(
                     Spacer(modifier = Modifier.width(6.dp))
                     Column {
                         Text(
-                            text = "Sincronizar no Firebase Cloud",
+                            text = "Salvar cópia na nuvem",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -2509,6 +2768,7 @@ fun ExportOptionsDialog(
     profile: ProfileEntity,
     skills: List<SkillEntity>,
     experiences: List<ExperienceEntity>,
+    educations: List<EducationEntity> = emptyList(),
     certificates: List<CertificateEntity>,
     themeSettings: com.example.data.local.entities.ThemeSettingsEntity,
     primaryColor: Color
@@ -2545,13 +2805,63 @@ fun ExportOptionsDialog(
                         .fillMaxWidth()
                         .clickable {
                             onDismiss()
-                            ExportUtils.exportToAtsPdf(context, profile, skills, experiences)
+                            ExportUtils.exportToAtsPdf(context, profile, skills, experiences, educations)
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = primaryColor.copy(alpha = 0.08f)
                     ),
                     border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.2f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "PDF para Seleção Automática (ATS)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Modelo simples e limpo em coluna única, ideal para triagem automática em vagas.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(Icons.Default.Download, contentDescription = "Baixar", tint = primaryColor)
+                    }
+                }
+
+                // Option 2: Styled PDF for Printing & Sharing
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onDismiss()
+                            ExportUtils.exportToStyledPdf(
+                                context = context,
+                                profile = profile,
+                                skills = skills,
+                                experiences = experiences,
+                                themeSettings = themeSettings,
+                                educations = educations,
+                                certificates = certificates
+                            )
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = primaryColor.copy(alpha = 0.12f)
+                    ),
+                    border = BorderStroke(1.5.dp, primaryColor.copy(alpha = 0.4f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -2568,26 +2878,26 @@ fun ExportOptionsDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Currículo ATS (PDF)",
+                                text = "Currículo Estilizado em PDF (Impressão)",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "Formato limpo otimizado para sistemas de recrutamento.",
+                                text = "Design visual completo com suas cores, foto, badges e linha do tempo para salvar e imprimir.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Icon(Icons.Default.Download, contentDescription = "Baixar", tint = primaryColor)
+                        Icon(Icons.Default.Print, contentDescription = "Salvar / Imprimir", tint = primaryColor)
                     }
                 }
 
-                // Option 2: Styled HTML Website
+                // Option 3: Styled HTML Website
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
                             onDismiss()
-                            ExportUtils.exportToStyledHtml(context, profile, skills, experiences, themeSettings)
+                            ExportUtils.exportToStyledHtml(context, profile, skills, experiences, themeSettings, educations)
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -2629,7 +2939,7 @@ fun ExportOptionsDialog(
                         .fillMaxWidth()
                         .clickable {
                             onDismiss()
-                            ExportUtils.exportToJson(context, profile, skills, experiences, certificates)
+                            ExportUtils.exportToJson(context, profile, skills, experiences, certificates, educations)
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -2652,11 +2962,11 @@ fun ExportOptionsDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Backup de Dados (JSON)",
+                                text = "Salvar Cópia no Celular (Backup)",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "Estrutura completa de dados para cópia de segurança.",
+                                text = "Gere um arquivo de segurança com todos os seus dados no aparelho.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2671,7 +2981,7 @@ fun ExportOptionsDialog(
                         .fillMaxWidth()
                         .clickable {
                             onDismiss()
-                            ExportUtils.exportToCsv(context, profile, skills, experiences, certificates)
+                            ExportUtils.exportToCsv(context, profile, skills, experiences, certificates, educations)
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(

@@ -71,8 +71,8 @@ enum class SettingsCategory(
         icon = Icons.Default.Palette
     ),
     SYNC_AI(
-        title = "Nuvem & IA",
-        description = "Sincronize com Firebase ou importe dados do LinkedIn com IA.",
+        title = "Salvar na Nuvem & IA",
+        description = "Salve seus dados na nuvem ou importe informações com IA.",
         icon = Icons.Default.SmartToy
     ),
     EXPORT(
@@ -165,6 +165,7 @@ fun SettingsScreen(
     val profile by viewModel.profile.collectAsState()
     val skills by viewModel.skills.collectAsState()
     val experiences by viewModel.experiences.collectAsState()
+    val educations by viewModel.educations.collectAsState()
     val certificates by viewModel.certificates.collectAsState()
     val sections by viewModel.sectionOrders.collectAsState()
 
@@ -631,6 +632,20 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    // Education Settings
+                    item {
+                        SettingsSectionCard(
+                            title = "Gerenciar Formação Acadêmica",
+                            icon = Icons.Default.School,
+                            primaryColor = primaryColor
+                        ) {
+                            EducationSettings(
+                                educations = educations,
+                                viewModel = viewModel,
+                                primaryColor = primaryColor
+                            )
+                        }
+                    }
                     // Certificates Settings
                     item {
                         SettingsSectionCard(
@@ -680,7 +695,7 @@ fun SettingsScreen(
                     // Cloud Sync Settings
                     item {
                         SettingsSectionCard(
-                            title = "Nuvem & Sincronização (Firebase)",
+                            title = "Salvar na Nuvem (Sincronização)",
                             icon = Icons.Default.CloudSync,
                             primaryColor = primaryColor
                         ) {
@@ -716,6 +731,8 @@ fun SettingsScreen(
                                 profile = profile,
                                 skills = skills,
                                 experiences = experiences,
+                                educations = educations,
+                                certificates = certificates,
                                 themeSettings = themeSettings,
                                 primaryColor = primaryColor
                             )
@@ -1505,7 +1522,8 @@ fun SkillsSettings(
         OutlinedTextField(
             value = selectedCategory,
             onValueChange = { selectedCategory = it },
-            label = { Text("Categoria da Skill (Ex: Desenvolvimento, Redes, Cloud)") },
+            label = { Text("Categoria da Skill") },
+            placeholder = { Text("Ex: Atendimento, Vendas, Informática") },
             modifier = Modifier.fillMaxWidth().testTag("skill_category_input"),
             singleLine = true
         )
@@ -1643,20 +1661,23 @@ fun ExperienceSettings(
             value = company,
             onValueChange = { company = it },
             label = { Text("Empresa / Instituição") },
+            placeholder = { Text("Ex: Padaria Silva, Google ou Freelancer") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
         OutlinedTextField(
             value = role,
             onValueChange = { role = it },
-            label = { Text("Cargo (Ex: Desenvolvedor Pleno)") },
+            label = { Text("Cargo (Ex: Atendente, Vendedor)") },
+            placeholder = { Text("Ex: Atendente, Vendedor ou Auxiliar") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
         OutlinedTextField(
             value = period,
             onValueChange = { period = it },
-            label = { Text("Período (Ex: 2021 - 2023)") },
+            label = { Text("Período (Ex: Jan 2021 - Atual)") },
+            placeholder = { Text("Ex: Jan 2021 - Atual") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -1664,6 +1685,7 @@ fun ExperienceSettings(
             value = desc,
             onValueChange = { desc = it },
             label = { Text("Descrição das Atividades") },
+            placeholder = { Text("Ex: Atendimento ao cliente, controle de caixa e organização de estoque") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3
         )
@@ -1730,10 +1752,148 @@ fun ExperienceSettings(
 }
 
 @Composable
+fun EducationSettings(
+    educations: List<com.example.data.local.entities.EducationEntity>,
+    viewModel: PortfolioViewModel,
+    primaryColor: Color
+) {
+    val context = LocalContext.current
+
+    var institution by remember { mutableStateOf("") }
+    var degree by remember { mutableStateOf("") }
+    var fieldOfStudy by remember { mutableStateOf("") }
+    var period by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Form to add Education
+        Text("Cadastrar Nova Formação Acadêmica:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+        OutlinedTextField(
+            value = institution,
+            onValueChange = { institution = it },
+            label = { Text("Instituição de Ensino") },
+            placeholder = { Text("Ex: Universidade de São Paulo (USP), ETEC ou Coursera") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = degree,
+            onValueChange = { degree = it },
+            label = { Text("Grau / Nível de Formação") },
+            placeholder = { Text("Ex: Bacharelado, Técnico, Pós-Graduação ou Tecnólogo") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = fieldOfStudy,
+            onValueChange = { fieldOfStudy = it },
+            label = { Text("Curso / Área de Estudo") },
+            placeholder = { Text("Ex: Ciência da Computação, Administração ou Enfermagem") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = period,
+            onValueChange = { period = it },
+            label = { Text("Período (Ex: Jan 2020 - Dez 2024)") },
+            placeholder = { Text("Ex: Jan 2020 - Dez 2024") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = desc,
+            onValueChange = { desc = it },
+            label = { Text("Descrição / Atividades Acadêmicas") },
+            placeholder = { Text("Ex: TCC focado em IA, monitoria em programação e projetos de extensão") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
+        Button(
+            onClick = {
+                if (institution.isNotBlank() && degree.isNotBlank()) {
+                    viewModel.addEducation(
+                        institution = institution.trim(),
+                        degree = degree.trim(),
+                        fieldOfStudy = fieldOfStudy.trim(),
+                        period = period.trim(),
+                        description = desc.trim()
+                    )
+                    institution = ""
+                    degree = ""
+                    fieldOfStudy = ""
+                    period = ""
+                    desc = ""
+                    Toast.makeText(context, "Formação acadêmica cadastrada com sucesso!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Preencha a instituição e o grau de formação!", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Adicionar Formação Acadêmica")
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Education List to manage
+        Text("Formações Cadastradas (${educations.size}):", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+
+        educations.forEach { edu ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${edu.degree}${if (edu.fieldOfStudy.isNotBlank()) " em ${edu.fieldOfStudy}" else ""}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "${edu.institution} | ${edu.period}",
+                            fontSize = 12.sp,
+                            color = primaryColor
+                        )
+                        if (edu.description.isNotBlank()) {
+                            Text(
+                                text = edu.description,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                    IconButton(onClick = { viewModel.removeEducation(edu.id) }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Remover formação acadêmica",
+                            tint = Color.Red.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ExportOptionsSettings(
     profile: ProfileEntity,
     skills: List<SkillEntity>,
     experiences: List<ExperienceEntity>,
+    educations: List<com.example.data.local.entities.EducationEntity> = emptyList(),
     certificates: List<com.example.data.local.entities.CertificateEntity> = emptyList(),
     themeSettings: com.example.data.local.entities.ThemeSettingsEntity,
     primaryColor: Color
@@ -1760,7 +1920,7 @@ fun ExportOptionsSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        com.example.utils.ExportUtils.exportToAtsPdf(context, profile, skills, experiences)
+                        com.example.utils.ExportUtils.exportToAtsPdf(context, profile, skills, experiences, educations)
                     }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1782,24 +1942,84 @@ fun ExportOptionsSettings(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Currículo ATS (PDF)",
+                        text = "PDF para Seleção Automática (ATS)",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Modelo limpo e estruturado em coluna única, ideal para sistemas ATS de recrutamento.",
+                        text = "Modelo simples e limpo em coluna única, ideal para seleção automática de recrutadores.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Icon(
                     imageVector = Icons.Default.Download,
-                    contentDescription = "Baixar PDF",
+                    contentDescription = "Baixar PDF ATS",
                     tint = primaryColor
                 )
             }
         }
 
-        // Option 2: Styled HTML Website
+        // Option 2: Styled PDF for Printing & Archiving
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = primaryColor.copy(alpha = 0.08f)
+            ),
+            border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.25f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        com.example.utils.ExportUtils.exportToStyledPdf(
+                            context = context,
+                            profile = profile,
+                            skills = skills,
+                            experiences = experiences,
+                            themeSettings = themeSettings,
+                            educations = educations,
+                            certificates = certificates
+                        )
+                    }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Currículo Estilizado em PDF (Impressão)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Design visual completo com suas cores, badges e linha do tempo em PDF pronto para imprimir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Print,
+                    contentDescription = "Salvar / Imprimir PDF",
+                    tint = primaryColor
+                )
+            }
+        }
+
+        // Option 3: Styled HTML Website
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -1812,7 +2032,7 @@ fun ExportOptionsSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        com.example.utils.ExportUtils.exportToStyledHtml(context, profile, skills, experiences, themeSettings)
+                        com.example.utils.ExportUtils.exportToStyledHtml(context, profile, skills, experiences, themeSettings, educations)
                     }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1864,7 +2084,7 @@ fun ExportOptionsSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        com.example.utils.ExportUtils.exportToJson(context, profile, skills, experiences, certificates)
+                        com.example.utils.ExportUtils.exportToJson(context, profile, skills, experiences, certificates, educations)
                     }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1886,11 +2106,11 @@ fun ExportOptionsSettings(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Backup de Dados (JSON)",
+                        text = "Salvar Cópia no Celular (Backup)",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Estrutura completa de dados para cópia de segurança e restauração.",
+                        text = "Gere um arquivo de segurança com todos os seus dados para restaurar quando quiser.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1916,7 +2136,7 @@ fun ExportOptionsSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        com.example.utils.ExportUtils.exportToCsv(context, profile, skills, experiences, certificates)
+                        com.example.utils.ExportUtils.exportToCsv(context, profile, skills, experiences, certificates, educations)
                     }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -2523,7 +2743,7 @@ fun CloudSyncSettings(
             ) {
                 Icon(Icons.Default.CloudSync, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Sincronizar e Mesclar (Recomendado)", fontWeight = FontWeight.Bold)
+                Text("Salvar e Sincronizar na Nuvem", fontWeight = FontWeight.Bold)
             }
 
             Row(
@@ -2543,7 +2763,7 @@ fun CloudSyncSettings(
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Baixar Nuvem", fontSize = 12.sp)
+                    Text("Baixar da Nuvem", fontSize = 12.sp)
                 }
 
                 OutlinedButton(
@@ -2562,7 +2782,7 @@ fun CloudSyncSettings(
                 ) {
                     Icon(Icons.Default.CloudUpload, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Enviar p/ Nuvem", fontSize = 12.sp)
+                    Text("Salvar na Nuvem", fontSize = 12.sp)
                 }
             }
 
@@ -2575,7 +2795,7 @@ fun CloudSyncSettings(
                     onDismissRequest = { showSaveDialog = false },
                     title = {
                         Text(
-                            text = "Opções de Envio à Nuvem",
+                            text = "Opções para Salvar na Nuvem",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

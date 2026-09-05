@@ -57,7 +57,8 @@ data class GeminiCandidate(
 data class ImportedLinkedInPortfolio(
     val profile: ImportedProfile?,
     val skills: List<ImportedSkill>?,
-    val experiences: List<ImportedExperience>?
+    val experiences: List<ImportedExperience>?,
+    val educations: List<ImportedEducation>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -82,6 +83,15 @@ data class ImportedExperience(
     val role: String?,
     val period: String?,
     val description: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class ImportedEducation(
+    val institution: String?,
+    val degree: String?,
+    val fieldOfStudy: String? = null,
+    val period: String?,
+    val description: String? = null
 )
 
 interface GeminiApiService {

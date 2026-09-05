@@ -79,6 +79,27 @@ class PortfolioRepository(
         portfolioDao.clearAllExperiences()
     }
 
+    // Education
+    fun getEducations(): Flow<List<EducationEntity>> {
+        return portfolioDao.getEducations()
+    }
+
+    suspend fun insertEducation(education: EducationEntity) {
+        portfolioDao.insertEducation(education)
+    }
+
+    suspend fun insertEducations(educations: List<EducationEntity>) {
+        portfolioDao.insertEducations(educations)
+    }
+
+    suspend fun deleteEducation(id: Int) {
+        portfolioDao.deleteEducationById(id)
+    }
+
+    suspend fun clearAllEducations() {
+        portfolioDao.clearAllEducations()
+    }
+
     // Section Order
     fun getSectionOrders(): Flow<List<SectionOrderEntity>> {
         return portfolioDao.getSectionOrders()
@@ -162,14 +183,36 @@ class PortfolioRepository(
                 )
                 portfolioDao.insertExperiences(defaultExperiences)
 
+                // Preload Academic Experience / Education
+                val defaultEducations = listOf(
+                    EducationEntity(
+                        institution = "Universidade de São Paulo (USP)",
+                        degree = "Bacharelado em Ciência da Computação",
+                        fieldOfStudy = "Sistemas Distribuídos & Engenharia de Software",
+                        period = "2015 - 2019",
+                        description = "Foco em redes de computadores, arquitetura de sistemas móveis de alta disponibilidade e segurança da informação.",
+                        displayOrder = 1
+                    ),
+                    EducationEntity(
+                        institution = "FIAP - Faculdade de Informática e Administração Paulista",
+                        degree = "Pós-Graduação / Especialização em Cloud Computing & DevOps",
+                        fieldOfStudy = "Arquitetura Cloud & Cibersegurança",
+                        period = "2021 - 2022",
+                        description = "Especialização em arquitetura em nuvem, orquestração de containers, infraestrutura como código (IaC) e segurança em ambientes híbridos.",
+                        displayOrder = 2
+                    )
+                )
+                portfolioDao.insertEducations(defaultEducations)
+
                 // Preload Section Orders
                 val defaultSections = listOf(
                     SectionOrderEntity("sobre", 1, "Sobre Mim"),
                     SectionOrderEntity("skills", 2, "Habilidades Técnicas"),
                     SectionOrderEntity("experiencia", 3, "Experiência Profissional"),
-                    SectionOrderEntity("certificados", 4, "Certificados & Conquistas"),
-                    SectionOrderEntity("projetos", 5, "Projetos GitHub"),
-                    SectionOrderEntity("contato", 6, "Contato")
+                    SectionOrderEntity("educacao", 4, "Experiência Acadêmica"),
+                    SectionOrderEntity("certificados", 5, "Certificados & Conquistas"),
+                    SectionOrderEntity("projetos", 6, "Projetos GitHub"),
+                    SectionOrderEntity("contato", 7, "Contato")
                 )
                 portfolioDao.insertSectionOrders(defaultSections)
 
@@ -229,13 +272,23 @@ class PortfolioRepository(
                   "period": "Período (ex: Jan 2020 - Presente)",
                   "description": "Breve resumo das responsabilidades e realizações"
                 }
+              ],
+              "educations": [
+                {
+                  "institution": "Nome da Instituição ou Faculdade",
+                  "degree": "Grau / Curso (ex: Bacharelado em Ciência da Computação)",
+                  "fieldOfStudy": "Área de Estudo / Especialização",
+                  "period": "Período (ex: 2018 - 2022)",
+                  "description": "Atividades acadêmicas ou detalhes relevantes"
+                }
               ]
             }
 
             Regras de Mapeamento:
             1. Se houver habilidades técnicas, divida-as em "Desenvolvimento" (se envolver programação, linguagens como Kotlin, Java, Python, bancos de dados, etc.) ou "Infraestrutura" (se envolver redes, servidores, DevOps, Docker, Kubernetes, AWS, suporte de TI, etc.). Use apenas uma dessas duas categorias.
-            2. Garanta que o JSON resultante seja válido e siga exatamente a estrutura indicada. Não inclua nenhuma outra chave ou explicações adicionais no JSON.
-            3. Responda APENAS com o JSON válido.
+            2. Extraia também as experiências acadêmicas / formação educacional (graduação, pós, cursos superiores) em "educations".
+            3. Garanta que o JSON resultante seja válido e siga exatamente a estrutura indicada. Não inclua nenhuma outra chave ou explicações adicionais no JSON.
+            4. Responda APENAS com o JSON válido.
 
             Texto do perfil/currículo:
             $rawText
@@ -301,12 +354,22 @@ class PortfolioRepository(
                   "period": "Período (ex: Jan 2020 - Presente)",
                   "description": "Resumo das responsabilidades, conquistas e atividades desenvolvidas"
                 }
+              ],
+              "educations": [
+                {
+                  "institution": "Nome da Instituição ou Faculdade",
+                  "degree": "Grau / Curso (ex: Bacharelado em Ciência da Computação)",
+                  "fieldOfStudy": "Área de Estudo / Especialização",
+                  "period": "Período (ex: 2018 - 2022)",
+                  "description": "Atividades acadêmicas ou detalhes relevantes"
+                }
               ]
             }
 
             Regras de Mapeamento:
             1. Categorize as habilidades em "Desenvolvimento" (programação, linguagens, bancos de dados, frontend/backend/mobile) ou "Infraestrutura" (servidores, redes, DevOps, cloud, suporte, segurança).
-            2. Responda APENAS com o JSON válido. Não inclua texto adicional fora do JSON.
+            2. Extraia também as experiências e formações acadêmicas em "educations".
+            3. Responda APENAS com o JSON válido. Não inclua texto adicional fora do JSON.
         """.trimIndent()
 
         val request = GeminiContentRequest(
@@ -381,7 +444,8 @@ class PortfolioRepository(
         skills: List<SkillEntity>,
         experiences: List<ExperienceEntity>,
         repos: List<GithubRepo>,
-        jobDescription: String? = null
+        jobDescription: String? = null,
+        educations: List<EducationEntity> = emptyList()
     ): ResumeImprovements? {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
@@ -390,6 +454,12 @@ class PortfolioRepository(
 
         val jobDescSection = if (!jobDescription.isNullOrBlank()) {
             "\n            5. Descrição Detalhada da Vaga Desejada (Oportunidade Alvo):\n            $jobDescription\n"
+        } else {
+            ""
+        }
+
+        val educationSection = if (educations.isNotEmpty()) {
+            "\n            6. Formação / Experiência Acadêmica do Usuário:\n            " + educations.joinToString("\n            ") { "- ${it.degree} na ${it.institution} (${it.period})${if (it.fieldOfStudy.isNotBlank()) " - Área: ${it.fieldOfStudy}" else ""}" } + "\n"
         } else {
             ""
         }
@@ -412,7 +482,7 @@ class PortfolioRepository(
             
             4. Repositórios do GitHub (Projetos do Portfólio):
                ${repos.joinToString("\n") { "- ${it.name} (Linguagem: ${it.language ?: "N/A"}, Estrelas: ${it.stargazersCount}): ${it.description ?: ""}" }}
-            $jobDescSection
+            $jobDescSection$educationSection
 
             Seu objetivo é gerar um JSON com sugestões de otimização de acordo com as seguintes regras:
             

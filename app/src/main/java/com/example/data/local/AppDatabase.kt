@@ -16,10 +16,11 @@ import kotlinx.coroutines.launch
         ProfileEntity::class,
         SkillEntity::class,
         ExperienceEntity::class,
+        EducationEntity::class,
         SectionOrderEntity::class,
         CertificateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -107,14 +108,36 @@ abstract class AppDatabase : RoomDatabase() {
             )
             dao.insertExperiences(defaultExperiences)
 
+            // Preload Academic Experience / Education
+            val defaultEducations = listOf(
+                EducationEntity(
+                    institution = "Universidade de São Paulo (USP)",
+                    degree = "Bacharelado em Ciência da Computação",
+                    fieldOfStudy = "Sistemas Distribuídos & Engenharia de Software",
+                    period = "2015 - 2019",
+                    description = "Foco em redes de computadores, arquitetura de sistemas móveis de alta disponibilidade e segurança da informação.",
+                    displayOrder = 1
+                ),
+                EducationEntity(
+                    institution = "FIAP - Faculdade de Informática e Administração Paulista",
+                    degree = "Pós-Graduação / Especialização em Cloud Computing & DevOps",
+                    fieldOfStudy = "Arquitetura Cloud & Cibersegurança",
+                    period = "2021 - 2022",
+                    description = "Especialização em arquitetura em nuvem, orquestração de containers, infraestrutura como código (IaC) e segurança em ambientes híbridos.",
+                    displayOrder = 2
+                )
+            )
+            dao.insertEducations(defaultEducations)
+
             // Preload Section Orders
             val defaultSections = listOf(
                 SectionOrderEntity("sobre", 1, "Sobre Mim"),
                 SectionOrderEntity("skills", 2, "Habilidades Técnicas"),
                 SectionOrderEntity("experiencia", 3, "Experiência Profissional"),
-                SectionOrderEntity("certificados", 4, "Certificados & Conquistas"),
-                SectionOrderEntity("projetos", 5, "Projetos GitHub"),
-                SectionOrderEntity("contato", 6, "Contato")
+                SectionOrderEntity("educacao", 4, "Experiência Acadêmica"),
+                SectionOrderEntity("certificados", 5, "Certificados & Conquistas"),
+                SectionOrderEntity("projetos", 6, "Projetos GitHub"),
+                SectionOrderEntity("contato", 7, "Contato")
             )
             dao.insertSectionOrders(defaultSections)
 

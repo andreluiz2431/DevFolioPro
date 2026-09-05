@@ -56,6 +56,22 @@ interface PortfolioDao {
     @Query("DELETE FROM experience")
     suspend fun clearAllExperiences()
 
+    // Education
+    @Query("SELECT * FROM education ORDER BY displayOrder ASC")
+    fun getEducations(): Flow<List<EducationEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEducation(education: EducationEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEducations(educations: List<EducationEntity>)
+
+    @Query("DELETE FROM education WHERE id = :id")
+    suspend fun deleteEducationById(id: Int)
+
+    @Query("DELETE FROM education")
+    suspend fun clearAllEducations()
+
     // Section Order
     @Query("SELECT * FROM section_order ORDER BY displayOrder ASC")
     fun getSectionOrders(): Flow<List<SectionOrderEntity>>

@@ -33,7 +33,8 @@ data class PortfolioSyncData(
     val experiences: List<ExperienceEntity>?,
     val themeSettings: ThemeSettingsEntity?,
     val sectionOrders: List<SectionOrderEntity>?,
-    val certificates: List<CertificateEntity>? = null
+    val certificates: List<CertificateEntity>? = null,
+    val educations: List<EducationEntity>? = null
 )
 
 class FirebaseSyncManager(private val context: Context) {
